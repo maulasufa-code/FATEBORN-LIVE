@@ -1,426 +1,442 @@
-# FATEBORN — Claude Code Development Rules
+# FATEBORN — Claude Code Project Rules
 
-These instructions govern all Claude Code work inside this repository.
+These rules apply to all Claude Code work in this repository.
 
-The goal is to work efficiently on the live FATEBORN Roblox project without
-creating conflicts between local source, Roblox Script Sync, Team Create,
-Git/GitHub, collaborators, and Roblox Studio MCP.
+The goal is to work safely and efficiently with:
 
----
-
-## 1. Current Project
-
-This repository is the current FATEBORN development workspace.
-
-The live Roblox Studio / Team Create place is the authoritative live game state.
-
-The repository contains Roblox Script Sync mirrors of the live Luau source.
-
-Think of the project as:
-
-Local synchronized Luau
-    ↕ Roblox Script Sync
-Roblox Studio
-    ↕ Team Create
-Live FATEBORN project
-
-Git/GitHub provides history, review, backup, and collaboration checkpoints.
-
-Roblox MCP provides access to the live Studio DataModel and runtime.
+- Roblox Team Create
+- Roblox Script Sync
+- Git / GitHub
+- Roblox Studio MCP
+- multiple collaborators
 
 ---
 
-## 2. Never Use Old Project Copies as Current Source
+## 1. Project Source of Truth
 
-Do not use older FATEBORN workspaces, exported places, backups, dumps,
-temporary scripts, generated inspection files, or copied source as current
-authoritative code.
+The live Roblox Studio / Team Create place is the authoritative live game project.
 
-In particular, files outside this repository must be treated as
-legacy/reference unless the user explicitly asks to inspect or recover them.
+This repository is the current Roblox Script Sync workspace containing
+synchronized Luau source from that live project.
 
-Never copy old code into the current project merely because it appears more
-complete.
-
-Always prefer:
-
-1. current synchronized repository source for Luau
-2. current Studio state for Studio-only objects/runtime
-3. legacy/reference material only when explicitly needed
-
----
-
-## 3. Script Sync File Naming
-
-Do not assume that a filename containing `legacy` is obsolete.
-
-Roblox Script Sync may use filenames such as:
-
-- `Something.legacy.luau`
-- `Something.local.luau`
-- `Something.luau`
-
-Typical meaning:
-
-- `.legacy.luau` = Roblox Script using Legacy RunContext
-- `.local.luau` = LocalScript
-- `.luau` = ModuleScript or synchronized Luau source
-
-A `.legacy.luau` filename can still be active production code.
-
-Determine whether something is actually a backup from its location and purpose,
-not merely from its filename.
-
-Known backup/archive locations should not be modified unless explicitly
-requested, including folders such as:
-
-- `ServerStorage/AnimationBackups`
-- `ServerStorage/PlayerMovementBackup_20260906`
-
----
-
-## 4. Local Code Is the Primary Editing Surface
-
-For synchronized Luau files represented in this repository:
+For synchronized Luau:
 
 - search locally
 - read locally
 - edit locally
 - save locally
-- let Roblox Script Sync propagate changes into Studio
+- let Roblox Script Sync propagate changes to Studio
 
-Do NOT edit the same synchronized script through Roblox MCP.
+For Roblox instances not represented on disk:
 
-Do not maintain two independent versions of the same script.
+- inspect them through Roblox Studio MCP
+- modify them through MCP when the task requires Studio-side changes
 
-Do not copy/paste source between local and Studio manually unless specifically
-required for recovery.
+The local repository and Roblox Studio are two views of the same live project.
 
----
-
-## 5. Search Before Reading
-
-When investigating code, use the narrowest search possible first.
-
-Preferred workflow:
-
-1. search for the relevant symbol, RemoteEvent, function, config key, preset,
-   attribute, or exact string
-2. identify the actual call sites
-3. read only relevant surrounding ranges
-4. follow the real execution path
-5. inspect additional files only when evidence requires it
-
-Avoid reading giant files from beginning to end unless necessary.
-
-Avoid repeatedly reading unchanged files.
-
-Avoid full-project audits for narrow bugs.
+Do not treat older project copies, exported places, dumps, temporary scripts,
+or backup workspaces outside this repository as current source.
 
 ---
 
-## 6. Minimal Changes
+## 2. Script Sync Naming
 
-Prefer the smallest change that fixes the actual root cause.
+Do not assume `.legacy.luau` means obsolete code.
 
-Do not:
+Script Sync naming may include:
 
-- rewrite entire systems for small bugs
-- refactor unrelated code
-- rename public APIs without need
-- create duplicate implementations
-- introduce parallel systems when an existing system can be repaired
-- reorganize large amounts of code merely for style
-- make formatting-only changes across unrelated files
+- `*.legacy.luau` — current Script using Legacy RunContext
+- `*.local.luau` — LocalScript
+- `*.luau` — synchronized Luau / commonly ModuleScript
 
-Preserve existing architecture unless the requested task genuinely requires
-changing it.
+Determine whether something is a backup from its location and purpose,
+not merely from its filename.
+
+Known backup/archive locations include:
+
+- `ServerStorage/AnimationBackups`
+- `ServerStorage/PlayerMovementBackup_20260906`
+
+Do not modify backup/archive code unless explicitly requested.
 
 ---
 
-## 7. Roblox MCP Responsibilities
+## 3. Code Editing Policy
 
-Use Roblox Studio MCP when information or objects exist only in Studio or when
-runtime verification is required.
+For synchronized Luau source:
 
-Appropriate MCP uses include:
+1. Search locally first.
+2. Read only relevant code.
+3. Follow the actual execution path.
+4. Find the real root cause.
+5. Make the smallest necessary change.
+6. Preserve existing interfaces and architecture where practical.
+7. Let Script Sync update Studio.
+8. Use MCP afterward only when Studio/runtime verification is needed.
 
-- inspecting the DataModel
+Do NOT edit synchronized Luau through MCP unless explicitly requested.
+
+Do NOT create separate Studio and local versions of the same script.
+
+Avoid:
+
+- broad rewrites for small bugs
+- unrelated refactors
+- duplicate systems
+- parallel implementations
+- cosmetic mass changes
+- unnecessary API renames
+
+Repair existing architecture before replacing it.
+
+---
+
+## 4. Search Strategy
+
+Prefer local filesystem search for code investigation.
+
+Use this order:
+
+1. search exact symbols / functions / remotes / config keys / attributes
+2. inspect surrounding code
+3. follow real call sites
+4. inspect dependencies only when necessary
+
+Prefer tools such as `rg` / grep over reading entire large scripts.
+
+Avoid:
+
+- reading large files from beginning to end without reason
+- repeatedly reading unchanged files
+- broad project audits for narrow bugs
+- searching backup folders without need
+- reading synchronized source through MCP when it already exists locally
+
+Trace real execution rather than guessing.
+
+Example:
+
+input
+→ client action
+→ RemoteEvent
+→ server handler
+→ gameplay system
+→ VFX dispatch
+
+---
+
+## 5. Roblox MCP
+
+Roblox MCP is the live Studio/runtime interface.
+
+Use MCP for:
+
+- DataModel inspection
 - Workspace
-- runtime characters
+- runtime objects
+- characters
 - NPCs
-- models
-- Tools
 - StarterGui visual hierarchy
-- GUI objects
+- Tools
+- models
+- map/build objects
 - ParticleEmitters
-- Attachments
 - Beams
 - Trails
-- animations
+- Attachments
+- animation objects
 - VFX templates
-- Lighting
 - properties
 - attributes
+- Lighting
 - runtime state
 - Output/errors
-- playtesting
-- Studio-only object creation/editing
+- targeted playtesting
+- Studio-only assets and instances
 
-MCP is the live Studio/runtime interface.
+MCP may modify NON-CODE Studio instances when required.
 
----
-
-## 8. MCP Code Editing Boundary
-
-If a Luau script exists in this synchronized repository:
-
-DO NOT modify its source through MCP.
-
-Modify the local synchronized file instead.
-
-MCP may modify Studio-only non-code instances when needed.
-
-Examples of acceptable MCP writes:
+Examples:
 
 - ParticleEmitter configuration
-- Attachment placement
-- Beam/Trail configuration
-- Models
+- Beam / Trail setup
+- Attachments
+- models
 - Parts
 - GUI visual objects
 - Lighting
-- Studio-only VFX templates
-
-Only edit synchronized Luau through MCP if the user explicitly requests
-Studio-side source editing.
-
----
-
-## 9. Missing From Disk Does Not Mean Missing From Game
-
-The local filesystem does not contain every Roblox Instance.
-
-If something cannot be found locally, inspect Studio through MCP before
-concluding that it does not exist.
-
-Examples commonly existing only in Studio:
-
-- ScreenGui
-- Frames
-- ImageLabels
-- Tools
-- Models
-- MeshParts
-- ParticleEmitters
-- Attachments
-- Trails
-- Beams
-- NPCs
-- animation objects
-- map objects
 - VFX templates
 
-Never recreate an object simply because it is absent from the repository.
-
-Check Studio first.
+For synchronized Luau source, edit local files instead.
 
 ---
 
-## 10. Team Create and Collaboration
+## 6. Missing Objects
 
-Assume other developers may be working in the live Team Create place.
+If something is missing from the repository, do NOT conclude that it is missing
+from the game.
+
+The repository does not represent every Roblox Instance.
+
+Check Studio through MCP for:
+
+- UI
+- Tools
+- models
+- ParticleEmitters
+- Attachments
+- Beams
+- Trails
+- map objects
+- NPCs
+- animation objects
+- other non-code instances
+
+Do not recreate an object simply because it is absent from disk.
+
+Inspect Studio first.
+
+---
+
+## 7. Team Create / Collaboration
+
+Assume collaborators may be editing the live Team Create project.
 
 Never blindly overwrite unexpected changes.
 
 If a synchronized file changes unexpectedly:
 
-1. stop editing that file
-2. inspect the current synchronized version
-3. assume the change may belong to a collaborator
-4. preserve valid collaborator work
-5. merge only what is necessary for the current task
+1. stop editing it
+2. inspect the current version
+3. assume the change may belong to another developer
+4. preserve valid collaborator changes
+5. merge only what is required
 
-Avoid simultaneous editing of the same script by multiple developers.
+Avoid simultaneous editing of the same script.
 
-Do not revert code merely because it was not created in the current Claude
-session.
+Never revert code merely because it was not written during this Claude session.
+
+Minimize the number of files touched.
+
+Avoid unrelated formatting changes or table reordering.
 
 ---
 
-## 11. Script Sync Conflict Safety
+## 8. Script Sync Conflicts
 
-Never automatically choose local/disk over Studio when resolving a Script Sync
-conflict.
+Never automatically prefer disk over Studio.
 
-Do not blindly overwrite the live Team Create version.
+If Script Sync reports a conflict:
 
-When a conflict occurs:
-
-- compare the versions
-- identify which contains newer collaborator work
-- preserve valid changes from both sides
+- compare both versions
+- identify newer collaborator changes
+- preserve valid work
 - resolve intentionally
 
-Do not use cached, copied, or legacy files to resolve live conflicts.
+Do not use cached, copied, backup, or legacy code to overwrite the live version.
 
 ---
 
-## 12. Git and GitHub Purpose
+## 9. Git / GitHub
 
 Git is used for:
 
-- change tracking
 - history
+- diff inspection
 - review
 - rollback safety
-- sharing repository state through GitHub
+- GitHub collaboration/checkpoints
 
-Git is NOT the live Roblox synchronization mechanism.
+Git is NOT the Roblox live synchronization mechanism.
 
-Roblox Script Sync handles:
+Roblox Script Sync:
 
-local synchronized code
+local repository
 ↕
 Roblox Studio / Team Create
 
-Git handles:
+Git:
 
 local repository
 ↕
 GitHub
 
-Do not confuse Git Sync with Roblox Script Sync.
+Before substantial work when relevant:
 
----
+- inspect `git status`
+- inspect existing local modifications
 
-## 13. Git Safety
+After changes:
 
-Before significant modifications, inspect repository state when useful.
+- inspect `git diff`
+- verify only intended files changed
+- use `git diff --check` when appropriate
 
-Useful commands include:
+Do not perform destructive Git operations without explicit user permission.
 
-- `git status`
-- `git diff`
-- `git diff --check`
-
-After a task, verify that only intended files changed.
-
-Never perform destructive Git operations without explicit user permission.
-
-Do not automatically run:
+Never automatically run:
 
 - `git reset --hard`
 - `git clean -fd`
-- destructive checkout
-- destructive revert
+- destructive checkout/revert
 - history rewriting
 - force push
 
-Never discard unknown local changes because they may belong to the user,
-Script Sync, or collaborators.
+Do not discard unknown modifications.
 
-Do not create commits unless requested.
-
----
-
-## 14. Git Branch Safety With Script Sync
-
-Be careful when switching Git branches while Roblox Script Sync is connected to
-the live Team Create place.
-
-Changing branches may modify many local files.
-
-Those filesystem changes can propagate through Script Sync into Roblox Studio.
-
-Therefore:
-
-- do not casually checkout another branch while Script Sync is active
-- do not perform large Git restores without understanding the Studio impact
-- do not pull/rebase automatically when synchronized files contain unexpected
-  changes
-- prefer explicit inspection before bringing remote Git changes into the live
-  synchronized workspace
+Do not commit or push unless explicitly requested.
 
 ---
 
-## 15. Gameplay Safety
+## 10. Git + Script Sync Safety
 
-When fixing visual, VFX, UI, animation, sound, or presentation bugs, preserve
-gameplay unless the user explicitly requests gameplay changes.
+Be careful with Git operations while Script Sync is connected.
 
-Do not accidentally change:
+Changing branches, pulling, restoring, rebasing, or checking out files may
+modify synchronized files and therefore propagate changes into live Studio.
+
+Do not casually:
+
+- switch branches
+- pull/rebase
+- restore large sets of files
+- checkout old revisions
+
+while Script Sync is active.
+
+Inspect consequences first.
+
+---
+
+## 11. Runtime Testing
+
+Testing must be hypothesis-driven.
+
+Before Play mode:
+
+1. know what is being tested
+2. know the expected result
+3. know what proves success/failure
+
+Preferred workflow:
+
+search locally
+→ identify likely root cause
+→ make targeted change
+→ allow Script Sync
+→ one focused Play test
+→ inspect result / Output
+→ stop Play
+
+Do not repeatedly Play test without:
+
+- a new hypothesis
+- a new code change
+- new evidence requiring another test
+
+---
+
+## 12. Character Select / Studio Debugging
+
+FATEBORN gameplay testing may be blocked by character selection.
+
+Do not waste repeated Play sessions clicking blindly through character select.
+
+If testing is blocked:
+
+- stop
+- inspect the relevant debug path
+- inspect `StudioDebugBypass` if relevant
+- keep any bypass Studio-only
+- do not weaken production character selection
+- do not alter production DataStore behavior merely to simplify testing
+
+Resolve the blocker intentionally, then continue the targeted test.
+
+---
+
+## 13. Gameplay Safety
+
+When fixing:
+
+- VFX
+- UI
+- animation
+- sound
+- presentation
+- feedback
+
+do not modify gameplay unless explicitly required.
+
+Preserve:
 
 - damage
 - cooldowns
 - hitboxes
 - stamina
-- movement speed
-- dash values
-- passive bonuses
+- movement values
 - race bonuses
-- item stats
-- skill effects
+- passive bonuses
+- abilities
 - inventory behavior
+- equipment stats
 - progression
 - save data
-- combat timing
 
-A presentation bug should not become an unrelated gameplay rewrite.
+A visual bug should not become a gameplay rewrite.
 
 ---
 
-## 16. Networking
+## 14. Networking
 
 Reuse existing FATEBORN networking architecture.
 
-Before creating a new:
+Before creating:
 
 - RemoteEvent
 - RemoteFunction
 - BindableEvent
-- networking channel
+- another networking/state channel
 
-search for an existing mechanism first.
+search for an existing mechanism.
 
-Do not create duplicate networking paths for an existing system.
+Do not duplicate networking paths.
 
-When debugging networking, trace the complete proven path:
+For runtime/network bugs trace the real chain:
 
-client action
-→ client dispatch
-→ RemoteEvent
+sender
+→ exact event/action name
+→ payload
 → server reception
-→ server gameplay function
-→ server VFX/event dispatch
+→ server dispatch
 → client reception
 → final behavior
 
-Do not assume a RemoteEvent fired merely because a handler exists.
+Do not assume an event fired merely because a handler exists.
 
 ---
 
-## 17. VFX Architecture
+## 15. VFX Architecture
 
-FATEBORN already has an existing reusable VFX framework.
+FATEBORN already has a reusable VFX framework.
 
-Do NOT rebuild the VFX framework unless explicitly requested.
+Do NOT rebuild it unless explicitly requested.
 
-Prefer using the existing:
+Prefer existing:
 
-- VFX remote
-- VFX client renderer
+- VFX remotes
+- renderer
 - presets
 - assets registry
-- templates
-- cleanup/lifetime handling
+- template architecture
+- cleanup/lifetime mechanisms
 - gameplay hooks
 
-When implementing or debugging VFX, inspect this path:
+When debugging VFX trace:
 
 gameplay trigger
-→ VFX dispatch
-→ exact effect/preset name
+→ dispatch
+→ exact preset/effect name
 → payload
 → client reception
 → preset lookup
@@ -428,14 +444,14 @@ gameplay trigger
 → rendering
 → cleanup
 
-Do not create a second VFX framework as a workaround.
+Do not create another VFX framework as a workaround.
 
-Do not spawn random direct ParticleEmitters from gameplay code when the existing
-framework should own the effect.
+Do not bypass the architecture with random ParticleEmitter spawning from
+gameplay code.
 
 ---
 
-## 18. VFX Cleanup Safety
+## 16. VFX Cleanup Safety
 
 Never blindly delete all:
 
@@ -445,186 +461,73 @@ Never blindly delete all:
 - Beams
 - Parts
 
-from a character or Tool.
+from a character, Tool, weapon, or model.
 
 Some may belong to:
 
 - character rigs
 - weapons
 - animations
-- hitboxes
 - accessories
+- hitboxes
 - gameplay systems
 
 Only remove instances proven to belong to the relevant VFX system.
 
 Use known:
 
-- folders
+- hierarchy
 - tags
 - attributes
 - names
 - ownership
-- template structure
+- templates
 
-to identify VFX-owned objects.
+to determine ownership.
 
 ---
 
-## 19. Imported Assets
+## 17. Imported Assets
 
-Treat third-party Roblox models/assets as untrusted project content.
+Treat imported / third-party Roblox models as untrusted project content.
 
-Before using an imported model:
+Before relying on them:
 
 - inspect hierarchy
 - inspect embedded scripts
 - do not execute unknown scripts merely for inspection
-- understand ParticleEmitters/Beams/Trails/Attachments used by the asset
-- preserve only what the project actually needs
+- understand emitters / beams / trails / attachments
+- preserve only what the project needs
 
-Do not delete source/reference packs unless explicitly requested.
+Do not delete source/reference assets unless requested.
 
 Do not casually change asset IDs or animation IDs.
 
 ---
 
-## 20. Instance Renaming
+## 18. Instance Renaming
 
-Before renaming an Instance that may be referenced by code, search for exact
-references such as:
+Before renaming an Instance that may be referenced by code, search for:
 
 - `WaitForChild("Name")`
 - `FindFirstChild("Name")`
 - `FindFirstAncestor("Name")`
 - indexed child access
-- configuration entries
-- attributes
-- tables containing the name
+- config references
+- attribute references
+- tables containing the exact name
 
-If a rename is necessary, update the complete proven dependency chain.
+If a rename is required, update the proven dependency chain.
 
-Do not perform cosmetic mass-renames during unrelated tasks.
-
----
-
-## 21. Studio Playtesting
-
-Testing must be hypothesis-driven.
-
-Before entering Play mode, know:
-
-- what behavior is being tested
-- what action will be performed
-- what output/result proves success
-- what result proves failure
-
-Preferred flow:
-
-search
-→ identify likely cause
-→ targeted code change
-→ wait for Script Sync
-→ one focused Play test
-→ inspect result/output
-→ stop
-
-Do not repeatedly enter Play mode with no new hypothesis or code change.
+Do not perform cosmetic mass-renaming during unrelated tasks.
 
 ---
 
-## 22. Character Select Testing
+## 19. Data / Production Safety
 
-FATEBORN may block gameplay tests behind character selection.
+Do not perform destructive changes to live player data.
 
-Do not waste repeated MCP actions clicking blindly through an unusable
-character-select screen.
-
-If gameplay testing is blocked:
-
-- stop the current test
-- inspect the relevant debug/test path
-- inspect `StudioDebugBypass` when relevant
-- keep any bypass strictly Studio-only
-- do not change production character selection just to simplify testing
-- do not alter production DataStore behavior merely for Studio testing
-
-Fix the test blocker deliberately before continuing.
-
----
-
-## 23. Runtime Debugging Standard
-
-When debugging, find the first point where expected behavior diverges from
-actual behavior.
-
-Distinguish:
-
-- hypothesis
-- evidence
-- proven root cause
-- fix
-- verification
-
-If evidence disproves a hypothesis, abandon it.
-
-Do not repeatedly test the same disproven theory.
-
-Use temporary trace logging only when it answers a specific question.
-
-Remove unnecessary temporary debug output after the issue is resolved.
-
----
-
-## 24. Performance and Tool Efficiency
-
-Optimize for correctness and low tool usage.
-
-Prefer:
-
-- local grep/search
-- small code reads
-- small diffs
-- direct runtime evidence
-- existing architecture
-- one targeted MCP inspection
-- one focused Play test
-
-Avoid:
-
-- broad scans without need
-- reading large scripts repeatedly
-- unnecessary MCP script reads
-- repeated screenshots
-- repeated hierarchy dumps
-- repeated Play sessions
-- speculative rewrites
-- unnecessary abstractions
-- unrelated cleanup
-
-Do not spend large amounts of context proving something already established.
-
----
-
-## 25. Do Not Reinvestigate Proven Facts Without Reason
-
-If previous evidence has already proven that a subsystem works, do not restart
-a full investigation of that subsystem unless new evidence contradicts it.
-
-Example:
-
-If direct VFX rendering has already been proven to work, investigate the
-gameplay-to-VFX dispatch path before re-auditing every ParticleEmitter.
-
-Use established evidence to narrow the next investigation.
-
----
-
-## 26. Data Safety
-
-Do not perform destructive operations against live player data.
-
-Do not modify production:
+Do not alter production:
 
 - DataStore schemas
 - migrations
@@ -639,72 +542,123 @@ unless explicitly requested.
 
 ---
 
-## 27. Completion Standard
+## 20. Efficiency
 
-A task is complete only when:
+Optimize for correctness AND low tool/context usage.
 
-- requested behavior is implemented
-- unrelated systems remain intact
+Prefer:
+
+- targeted local search
+- small reads
+- small diffs
+- existing architecture
+- direct evidence
+- one targeted MCP inspection
+- one focused runtime test
+
+Avoid:
+
+- unnecessary full-project scans
+- repeated MCP calls
+- repeated screenshots
+- repeated hierarchy dumps
+- repeated Play sessions
+- reading giant files multiple times
+- speculative rewrites
+- unnecessary abstractions
+- unrelated technical debt
+
+Do not reinvestigate facts already proven unless new evidence contradicts them.
+
+---
+
+## 21. Root Cause Standard
+
+Do not call a bug fixed based only on code inspection when runtime verification
+is practical.
+
+Distinguish:
+
+- hypothesis
+- evidence
+- proven root cause
+- applied fix
+- verified result
+
+If evidence disproves a hypothesis, abandon it.
+
+For cross-system bugs, find the FIRST point where expected behavior diverges
+from actual behavior.
+
+---
+
+## 22. Completion Standard
+
+Before completing a task:
+
+- requested behavior works
+- unrelated behavior remains intact
 - only intended files/instances changed
 - no obvious new runtime errors were introduced
-- temporary debugging artifacts are removed when no longer needed
+- temporary debug instrumentation is removed when no longer needed
+- temporary test/VFX objects are cleaned up
 - relevant runtime behavior is verified when practical
 
-For bug fixes, report:
+Final report should be concise:
 
 1. root cause
 2. files/instances changed
 3. exact fix
 4. test performed
 5. result
-6. remaining limitation or unverified item
+6. remaining limitation/unverified item
 
-Keep final reports concise unless the user asks for detail.
+Do not provide a long narrative unless requested.
 
 ---
 
-## 28. Default Decision Rules
+## 23. Decision Rules
 
 When uncertain:
 
-For synchronized Luau:
-→ use local repository files
+Synchronized Luau
+→ local repository
 
-For Studio-only objects:
-→ use Roblox MCP
+Studio-only object
+→ MCP
 
-For runtime behavior:
-→ use Roblox MCP
+Runtime state
+→ MCP
 
-For project history/diff:
-→ use Git
+Git history/diff
+→ Git
 
-For live collaboration state:
+Live collaboration
 → preserve Team Create changes
 
-For old backups:
-→ do not use unless explicitly requested
+Missing local object
+→ inspect Studio before recreating
 
-For narrow bugs:
-→ make narrow fixes
-
-For existing systems:
+Existing architecture
 → repair before replacing
 
-For unclear missing objects:
-→ inspect Studio before recreating
+Narrow problem
+→ narrow fix
+
+Legacy/reference source
+→ do not use unless explicitly requested
 
 ---
 
-## 29. Priority
+## 24. Priority
 
-When instructions conflict, follow this priority:
+When instructions conflict:
 
 1. explicit current user request
-2. protection of live project and collaborator work
+2. safety of the live project and collaborator work
 3. current synchronized local source for Luau
 4. current live Studio state for non-code/runtime
 5. these CLAUDE.md rules
-6. historical/legacy/reference material
+6. historical / legacy / reference material
 
 Never choose an old snapshot over current synchronized/live project state.
