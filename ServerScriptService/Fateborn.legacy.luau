@@ -65,6 +65,27 @@ if not vfxLocal then
 	vfxLocal.Parent = vfxFolder
 end
 
+-- Particle effects are Studio-only source content, so Rojo removes any
+-- manually-created ReplicatedStorage copy on the next sync. Build the client
+-- template mirror at runtime before LocalScripts begin rendering VFX.
+local templates = vfxFolder:FindFirstChild("Templates")
+if not templates then
+	local source = ServerStorage:FindFirstChild("Particle effects")
+	if source then
+		templates = Instance.new("Folder")
+		templates.Name = "Templates"
+		templates.Parent = vfxFolder
+		local folderNames = { Portals = "Portal", Explosions = "Explosion", Other = "Misc", BlackHoles = "BlackHole", Slashes = "Slash" }
+		for _, folder in ipairs(source:GetChildren()) do
+			local copy = folder:Clone()
+			copy.Name = folderNames[folder.Name] or folder.Name
+			copy.Parent = templates
+		end
+	else
+		warn("FATEBORN VFX source folder missing: ServerStorage.Particle effects")
+	end
+end
+
 local function dispatchVFX(effectName, position, color, data)
 	vfxRemote:FireAllClients(effectName, position, color, data)
 end
@@ -115,6 +136,64 @@ local function deepCopy(value)
 	local result = {}
 	for key, item in pairs(value) do
 		result[key] = deepCopy(item)
+	end
+	return result
+end
+
+local function sanitizeUtf8(value)
+	if utf8.len(value) then
+		return value
+	end
+
+	local result = {}
+	local index = 1
+	while index <= #value do
+		local first = string.byte(value, index)
+		local length = first < 0x80 and 1
+			or first >= 0xC2 and first <= 0xDF and 2
+			or first >= 0xE0 and first <= 0xEF and 3
+			or first >= 0xF0 and first <= 0xF4 and 4
+			or 0
+		local valid = length > 0 and index + length - 1 <= #value
+		for offset = 1, length - 1 do
+			local byte = string.byte(value, index + offset)
+			valid = valid and byte >= 0x80 and byte <= 0xBF
+		end
+		local second = length > 1 and string.byte(value, index + 1) or nil
+		if first == 0xE0 then valid = valid and second >= 0xA0 end
+		if first == 0xED then valid = valid and second <= 0x9F end
+		if first == 0xF0 then valid = valid and second >= 0x90 end
+		if first == 0xF4 then valid = valid and second <= 0x8F end
+		if valid then
+			table.insert(result, string.sub(value, index, index + length - 1))
+			index += length
+		else
+			table.insert(result, "?")
+			index += 1
+		end
+	end
+	return table.concat(result)
+end
+
+local function dataStoreCopy(value)
+	local valueType = typeof(value)
+	if valueType == "string" then
+		return sanitizeUtf8(value)
+	elseif valueType == "number" or valueType == "boolean" then
+		return value
+	elseif valueType ~= "table" then
+		-- Config-only values such as Color3 Accent are rebuilt from Config when
+		-- needed and must not be passed to DataStoreService.
+		return nil
+	end
+
+	local result = {}
+	for key, item in pairs(value) do
+		local safeKey = typeof(key) == "string" and sanitizeUtf8(key) or key
+		local safeItem = dataStoreCopy(item)
+		if safeItem ~= nil then
+			result[safeKey] = safeItem
+		end
 	end
 	return result
 end
@@ -192,7 +271,11 @@ local function rollCategory(profile, category, countSpin)
 	end
 	local pity = profile.Pity[category] or 0
 	local item = weightedChoice(pool, pity)
-	profile.Fate[category] = deepCopy(item)
+	-- Accent is a Color3 used only for presentation and is reconstructed from
+	-- Config. Excluding it keeps newly rolled Fate data DataStore-safe.
+	local storedItem = deepCopy(item)
+	storedItem.Accent = nil
+	profile.Fate[category] = storedItem
 	if countSpin ~= false then
 		profile.Spins += 1
 	end
@@ -335,7 +418,7 @@ local function savePlayer(player)
 	if activeSlot and profiles[player] then
 		account.Slots[activeSlot] = deepCopy(profiles[player])
 	end
-	local payload = deepCopy(account)
+	local payload = dataStoreCopy(account)
 	local success, err = pcall(function()
 		store:UpdateAsync("u_" .. player.UserId, function()
 			return payload

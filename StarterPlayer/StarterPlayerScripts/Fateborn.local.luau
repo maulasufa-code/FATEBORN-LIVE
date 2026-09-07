@@ -135,6 +135,12 @@ local function stopIntroBGM()
 	):Play()
 end
 
+-- Start the shared BGM as soon as the client is ready. Character-select may
+-- already be completed (or its close event may have fired before this script
+-- finished wiring up), so relying only on playIntro() can leave the game
+-- permanently silent.
+task.defer(playIntroBGM)
+
 local function normalizeAngle(angle)
 	return ((angle % 360) + 360) % 360
 end

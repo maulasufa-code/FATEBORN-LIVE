@@ -8,6 +8,35 @@ local Presets = require(vfx:WaitForChild("Presets"))
 local Assets = require(vfx:WaitForChild("Assets"))
 local templates = vfx:WaitForChild("Templates")
 
+-- The imported particle pack keeps descriptive instance names (for example
+-- "D - QUICKSTEP") instead of the stable names used by Assets.luau. Keep the
+-- translation in the client renderer so Rojo cannot discard Studio-only
+-- aliases during the next sync.
+local templateAliases = {
+	HitLight = "Hits.HitEffect", HitHeavy = "Hits.HitEff2", CritStrike = "Hits.HitEff",
+	BlockContact = "Hits.BlockEff", ParryContact = "Misc.Perfect Block", GuardBreak = "Portal.BlockBreak",
+	ImpactMedium = "Hits.HitEff2", ImpactLarge = "Hits.HitEff",
+	BloodSuddenWound = "Blood.A - SUDDEN WOUND", BloodHemorrhage = "Blood.B - HEMORRHAGE",
+	BloodSplatter = "Blood.C - BLOOD SPLATTER", BloodSwordContact = "Blood.SwordHitEff2",
+	PortalA = "Portal.07 - PORTAL [A]", PortalB = "Portal.08 - PORTAL [B]",
+	AuraBase = "Misc.Aura", PrestigeAura = "Misc.Aura", Quickstep = "Hits.D - QUICKSTEP",
+	ArcaneTrace = "Misc.Magic Ting7", CastSmall = "Misc.Magic Ting", CastMedium = "Fire.Magic Ting2", CastLarge = "Fire.Magic Ting3",
+	FireImpact = "Fire.Burn", FireBurst = "Fire.C - STRONG FIRE", FireAura = "Fire.B - FLAMES",
+	FireTrail = "Fire.E - FLOOR FLAMES", FireCharge = "Misc.G - CHARGE", FireProjectile = "Fire.B - FLAMES",
+	FireSmoke = "Fire.Burn", FireEmbers = "Fire.A - CANDLELIGHT",
+	ExplosionA = "Explosion.01 - EXPLOSION [A]", ExplosionB = "Explosion.02 - EXPLOSION [B]",
+	LightningImpact = "Lightning.05 - LIGHTNING STRIKE [A]", LightningArc = "Lightning.I - ELECTRIC BURST",
+	LightningCharge = "Lightning.G - LIGHTNING BOLT 01", LightningAura = "Lightning.I - ELECTRIC BURST",
+	LightningTrail = "Lightning.H - LIGHTNING BOLT 02",
+	SlashLight = "Slash.A - CUTS 01", SlashHeavy = "Slash.B - SLASHES 01", SlashMagic = "Slash.C - SLASH STRIKE",
+	SlashMulti = "Slash.D - MULTIPLE SLASHES",
+	SmokeLight = "Smoke.A - SMOKE [A]", SmokeHeavy = "Smoke.C - DARK SMOKE [A]",
+	SmokeBurst = "Smoke.B - SMOKE [B]", SmokeLoop = "Smoke.D - DARK SMOKE [B]",
+	WaterSplash = "Water.SPLASH", WaterImpact = "Water.C - STRONG WATER SPRAY", WaterTrail = "Water.A - STEADY RIPPLE",
+	WaterBurst = "Water.B - WATER SPRAY", WaterAura = "Water.E - STEAM",
+	BlackHoleA = "BlackHole.03 - BLACK HOLE [A]", BlackHoleB = "BlackHole.04 - BLACK HOLE [B]",
+}
+
 local container = workspace:FindFirstChild("ClientVFX")
 if not container then
 	container = Instance.new("Folder")
@@ -33,13 +62,17 @@ local function transientAnchor(position, name, direction)
 end
 
 local function resolveTemplate(name)
-	local path = Assets.Templates[name]
-	if not path then return nil end
-	local node = templates
-	for segment in string.gmatch(path, "[^%.]+") do
-		node = node and node:FindFirstChild(segment)
+	local function findPath(path)
+		if not path then return nil end
+		local node = templates
+		for segment in string.gmatch(path, "[^%.]+") do
+			node = node and node:FindFirstChild(segment)
+		end
+		return node
 	end
-	return node
+	-- Assets contains the logical path. It may point to an imported name that
+	-- does not exist, so only accept it when the complete path resolves.
+	return findPath(Assets.Templates[name]) or findPath(templateAliases[name])
 end
 
 local function scaleSequence(sequence, scale)
@@ -73,7 +106,10 @@ local function cloneLayers(templateName, position, color, options)
 	attachment.Parent = anchor
 
 	local emitters = {}
-	for _, layer in ipairs(template:GetChildren()) do
+	-- Imported templates are usually Parts/Models. Their ParticleEmitters may
+	-- be nested under Attachments, so direct children alone silently produce an
+	-- empty effect (for example, Perfect Block has five nested emitters).
+	for _, layer in ipairs(template:GetDescendants()) do
 		if layer:IsA("ParticleEmitter") then
 			local emitter = layer:Clone()
 			emitter.Enabled = false
