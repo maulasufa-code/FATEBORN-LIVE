@@ -12,6 +12,9 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local ServerStorage = game:GetService("ServerStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local RaceCharacterModels = require(
+	ReplicatedStorage:WaitForChild("ZeroScript"):WaitForChild("Data"):WaitForChild("RaceCharacterModels")
+)
 local HitReactionSystem = require(ServerStorage:WaitForChild("ZeroScript"):WaitForChild("HitReactionSystem"))
 local EnemyAISystem = require(ServerStorage:WaitForChild("ZeroScript"):WaitForChild("EnemyAISystem"))
 local rng = Random.new()
@@ -377,6 +380,65 @@ local function addBillboard(character, player)
 	character:SetAttribute("Power", computePower(profile))
 end
 
+local function replaceRaceCharacter(player, character)
+	local profile = profiles[player]
+	local raceName = profile
+		and profile.Fate.Race
+		and profile.Fate.Race.Name
+	local characterProfile = RaceCharacterModels.getProfile(raceName)
+
+	if not characterProfile or character:GetAttribute("RaceCharacterProfile") == raceName then
+		return false
+	end
+
+	local templateFolder = ServerStorage:FindFirstChild(characterProfile.TemplateFolder)
+	local templateContainer = templateFolder and templateFolder:FindFirstChild(characterProfile.TemplateName)
+	local template = templateContainer and templateContainer:FindFirstChild(characterProfile.CharacterModelName)
+	if not template or not template:IsA("Model") then
+		warn("FATEBORN race character template is missing for", raceName)
+		return false
+	end
+
+	local replacement = template:Clone()
+	local humanoid = replacement:FindFirstChildOfClass("Humanoid")
+	local root = replacement:FindFirstChild("HumanoidRootPart")
+	if not humanoid or not root or not root:IsA("BasePart") then
+		replacement:Destroy()
+		warn("FATEBORN race character template is not a usable character for", raceName)
+		return false
+	end
+
+	for _, descendant in ipairs(replacement:GetDescendants()) do
+		if descendant:IsA("BaseScript") then
+			descendant:Destroy()
+		end
+	end
+
+	for _, child in ipairs(character:GetChildren()) do
+		if child:IsA("BaseScript") then
+			child:Clone().Parent = replacement
+		end
+	end
+
+	if not humanoid:FindFirstChildOfClass("Animator") then
+		Instance.new("Animator", humanoid)
+	end
+	humanoid.RequiresNeck = false
+	replacement.Name = player.Name
+	replacement.PrimaryPart = root
+	replacement:SetAttribute("Race", raceName)
+	replacement:SetAttribute("RaceCharacterProfile", raceName)
+	replacement:SetAttribute("RaceCharacterAssetId", characterProfile.AssetId)
+	replacement:SetAttribute("FatebornBoneCharacter", characterProfile.BoneCharacter == true)
+
+	local spawnCFrame = character:GetPivot()
+	replacement.Parent = workspace
+	replacement:PivotTo(spawnCFrame)
+	player.Character = replacement
+	character:Destroy()
+	return true
+end
+
 local function applyCharacter(player, character)
 	local profile = profiles[player]
 	if not profile or not profile.Fate.Durability or not profile.Fate.Speed or not profile.Fate.Ability then
@@ -398,13 +460,37 @@ local function applyCharacter(player, character)
 	character:SetAttribute("Dashing", false)
 	humanoid.JumpPower = math.clamp(50 * (0.94 + speed * 0.08), 45, 65)
 
-	-- FATEBORN ability/passive visuals are temporarily disabled. Remove only
-	-- remnants this system created; gameplay attachments and equipment stay intact.
+	local accent = Color3.fromRGB(255, 178, 46)
+	for _, item in ipairs(Config.Pools.Ability) do
+		if item.Name == profile.Fate.Ability.Name then
+			accent = item.Accent
+			break
+		end
+	end
 	for _, oldName in ipairs({ "FateAura", "PrestigeAura" }) do
 		local old = root:FindFirstChild(oldName)
 		if old then
 			old:Destroy()
 		end
+	end
+	local light = Instance.new("PointLight")
+	light.Name = "FateAura"
+	light.Color = accent
+	light.Range = 8 + Config.GetRarityRank(profile.Fate.Ability.Rarity) * 2
+	light.Brightness = math.max(0.4, Config.GetRarityRank(profile.Fate.Ability.Rarity) * 0.35)
+	light.Parent = root
+
+	if Config.GetRarityRank(profile.Fate.Ability.Rarity) >= 4 then
+		local particles = Instance.new("ParticleEmitter")
+		particles.Name = "PrestigeAura"
+		particles.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		particles.Color = ColorSequence.new(accent)
+		particles.LightEmission = 0.8
+		particles.Rate = 6 + Config.GetRarityRank(profile.Fate.Ability.Rarity) * 2
+		particles.Lifetime = NumberRange.new(0.5, 1.2)
+		particles.Speed = NumberRange.new(0.5, 2)
+		particles.SpreadAngle = Vector2.new(180, 180)
+		particles.Parent = root
 	end
 
 	addBillboard(character, player)
@@ -860,8 +946,12 @@ local function basicAttack(player, direction)
 			bestDistance = offset.Magnitude
 		end
 	end
+	local color = abilityColor(profile)
+	dispatchVFX("Slash", root.Position + direction.Unit * 3 + Vector3.new(0, 1.5, 0), color, {
+		SourceUserId = player.UserId,
+		Direction = direction,
+	})
 	if best then
-		local color = abilityColor(profile)
 		damageEnemy(player, best, baseDamage(profile), "Light")
 		dispatchVFX("CombatHit", best.HumanoidRootPart.Position, color, { SourceUserId = player.UserId })
 	end
@@ -915,6 +1005,13 @@ local function useAbility(player, slot, direction)
 			damageEnemy(player, model, damage, reactionKind, knockback)
 		end
 	end
+	dispatchVFX("Skill", center, color, {
+		SourceUserId = player.UserId,
+		Mode = move.Mode,
+		Direction = direction,
+		Radius = move.Mode == "Awakening" and move.Range * 2 or math.clamp(move.Range, 8, 32),
+		Lifetime = move.Mode == "Awakening" and 0.8 or 0.4,
+	})
 end
 
 actionRemote.OnServerEvent:Connect(function(player, action, value, direction)
@@ -1047,6 +1144,7 @@ awakenFate.OnServerInvoke = function(player, category)
 		applyCharacter(player, player.Character)
 	end
 	sendState(player)
+	savePlayer(player)
 	return { Ok = true, Result = deepCopy(result), State = publicState(profile, player) }
 end
 
@@ -1074,6 +1172,7 @@ rerollFate.OnServerInvoke = function(player, category)
 		applyCharacter(player, player.Character)
 	end
 	sendState(player)
+	savePlayer(player)
 	return { Ok = true, Result = deepCopy(result), Cost = cost, State = publicState(profile, player) }
 end
 
@@ -1374,6 +1473,12 @@ Players.PlayerAdded:Connect(function(player)
 	end)
 	player.CharacterAdded:Connect(function(character)
 		task.defer(function()
+			if player.Character ~= character then
+				return
+			end
+			if replaceRaceCharacter(player, character) then
+				return
+			end
 			local humanoid = character:WaitForChild("Humanoid", 10)
 			local root = character:WaitForChild("HumanoidRootPart", 10)
 			local spawn = worldFolder and worldFolder:FindFirstChild("FatebornSpawn")
