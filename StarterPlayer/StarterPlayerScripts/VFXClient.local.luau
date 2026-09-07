@@ -211,15 +211,8 @@ local function playMovement(name, position, color, data)
 	end
 end
 
-local DISABLED_FATEBORN_VFX = {
-	Skill = true,
-	Aura = true,
-	Status = true,
-	PrestigeAura = true,
-}
-
 local function play(kind, position, color, data)
-	if DISABLED_FATEBORN_VFX[kind] or typeof(position) ~= "Vector3" then return end
+	if typeof(position) ~= "Vector3" then return end
 	data = data or {}
 	local presetName = kind
 	if kind == "Skill" then
