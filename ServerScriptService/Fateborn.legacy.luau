@@ -12,6 +12,9 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local ServerStorage = game:GetService("ServerStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local RaceCharacterModels = require(
+	ReplicatedStorage:WaitForChild("ZeroScript"):WaitForChild("Data"):WaitForChild("RaceCharacterModels")
+)
 local HitReactionSystem = require(ServerStorage:WaitForChild("ZeroScript"):WaitForChild("HitReactionSystem"))
 local EnemyAISystem = require(ServerStorage:WaitForChild("ZeroScript"):WaitForChild("EnemyAISystem"))
 local rng = Random.new()
@@ -375,6 +378,65 @@ local function addBillboard(character, player)
 	character:SetAttribute("Race", profile.Fate.Race.Name)
 	character:SetAttribute("Ability", profile.Fate.Ability.Name)
 	character:SetAttribute("Power", computePower(profile))
+end
+
+local function replaceRaceCharacter(player, character)
+	local profile = profiles[player]
+	local raceName = profile
+		and profile.Fate.Race
+		and profile.Fate.Race.Name
+	local characterProfile = RaceCharacterModels.getProfile(raceName)
+
+	if not characterProfile or character:GetAttribute("RaceCharacterProfile") == raceName then
+		return false
+	end
+
+	local templateFolder = ServerStorage:FindFirstChild(characterProfile.TemplateFolder)
+	local templateContainer = templateFolder and templateFolder:FindFirstChild(characterProfile.TemplateName)
+	local template = templateContainer and templateContainer:FindFirstChild(characterProfile.CharacterModelName)
+	if not template or not template:IsA("Model") then
+		warn("FATEBORN race character template is missing for", raceName)
+		return false
+	end
+
+	local replacement = template:Clone()
+	local humanoid = replacement:FindFirstChildOfClass("Humanoid")
+	local root = replacement:FindFirstChild("HumanoidRootPart")
+	if not humanoid or not root or not root:IsA("BasePart") then
+		replacement:Destroy()
+		warn("FATEBORN race character template is not a usable character for", raceName)
+		return false
+	end
+
+	for _, descendant in ipairs(replacement:GetDescendants()) do
+		if descendant:IsA("BaseScript") then
+			descendant:Destroy()
+		end
+	end
+
+	for _, child in ipairs(character:GetChildren()) do
+		if child:IsA("BaseScript") then
+			child:Clone().Parent = replacement
+		end
+	end
+
+	if not humanoid:FindFirstChildOfClass("Animator") then
+		Instance.new("Animator", humanoid)
+	end
+	humanoid.RequiresNeck = false
+	replacement.Name = player.Name
+	replacement.PrimaryPart = root
+	replacement:SetAttribute("Race", raceName)
+	replacement:SetAttribute("RaceCharacterProfile", raceName)
+	replacement:SetAttribute("RaceCharacterAssetId", characterProfile.AssetId)
+	replacement:SetAttribute("FatebornBoneCharacter", characterProfile.BoneCharacter == true)
+
+	local spawnCFrame = character:GetPivot()
+	replacement.Parent = workspace
+	replacement:PivotTo(spawnCFrame)
+	player.Character = replacement
+	character:Destroy()
+	return true
 end
 
 local function applyCharacter(player, character)
@@ -1411,6 +1473,12 @@ Players.PlayerAdded:Connect(function(player)
 	end)
 	player.CharacterAdded:Connect(function(character)
 		task.defer(function()
+			if player.Character ~= character then
+				return
+			end
+			if replaceRaceCharacter(player, character) then
+				return
+			end
 			local humanoid = character:WaitForChild("Humanoid", 10)
 			local root = character:WaitForChild("HumanoidRootPart", 10)
 			local spawn = worldFolder and worldFolder:FindFirstChild("FatebornSpawn")

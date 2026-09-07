@@ -6,20 +6,11 @@ local RunService = game:GetService("RunService")
 
 local remote = ReplicatedStorage:WaitForChild("PlayerMovement")
 local player = Players.LocalPlayer
+local RaceCharacterModels = require(
+	ReplicatedStorage:WaitForChild("ZeroScript"):WaitForChild("Data"):WaitForChild("RaceCharacterModels")
+)
 
 local rigs = {}
-
-local clipIds = {
-	Walk = "rbxassetid://92954261547077",
-	Run = "rbxassetid://85618915186426",
-	Roll = "rbxassetid://137733801815535",
-}
-
-local nativeIds = {}
-
-for _, id in pairs(clipIds) do
-	nativeIds[id] = true
-end
 
 local sprint = false
 
@@ -140,6 +131,12 @@ local function register(character)
 		return
 	end
 
+	local raceName = character:GetAttribute("RaceCharacterProfile")
+	local characterProfile = RaceCharacterModels.getProfile(raceName)
+	if not characterProfile then
+		return
+	end
+
 	local humanoid = character:WaitForChild(
 		"Humanoid",
 		10
@@ -169,7 +166,7 @@ local function register(character)
 
 	local bones = {}
 
-	for _, bone in ipairs(mesh:GetDescendants()) do
+	for _, bone in ipairs(character:GetDescendants()) do
 
 		if bone:IsA("Bone") then
 
@@ -214,7 +211,8 @@ local function register(character)
 		bones = bones,
 		phase = 0,
 		animator = animator,
-		tracks = {}
+		tracks = {},
+		nativeIds = {},
 	}
 
 	rigs[character] = rig
@@ -232,7 +230,10 @@ local function register(character)
 
 		if animator then
 
-			for name, id in pairs(clipIds) do
+			for name, animationData in pairs(characterProfile.Animations) do
+
+				local id = animationData.Id
+				rig.nativeIds[id] = true
 
 				local animation = Instance.new("Animation")
 
@@ -608,7 +609,7 @@ RunService.PreSimulation:Connect(function(dt)
 
 				local nativeMovement =
 					animationId
-					and nativeIds[animationId] == true
+					and rig.nativeIds[animationId] == true
 
 				local priority =
 					track.Priority
