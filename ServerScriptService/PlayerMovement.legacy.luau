@@ -5,7 +5,18 @@ local Debris = game:GetService("Debris")
 
 local StaminaSystem = require(ServerStorage:WaitForChild("ZeroScript"):WaitForChild("StaminaSystem"))
 local HitReactionSystem = require(ServerStorage:WaitForChild("ZeroScript"):WaitForChild("HitReactionSystem"))
-local vfxRemote = ReplicatedStorage:WaitForChild("VFX"):WaitForChild("VFXEvent")
+local vfxFolder = ReplicatedStorage:FindFirstChild("VFX")
+if not vfxFolder then
+	vfxFolder = Instance.new("Folder")
+	vfxFolder.Name = "VFX"
+	vfxFolder.Parent = ReplicatedStorage
+end
+local vfxRemote = vfxFolder:FindFirstChild("VFXEvent")
+if not vfxRemote then
+	vfxRemote = Instance.new("RemoteEvent")
+	vfxRemote.Name = "VFXEvent"
+	vfxRemote.Parent = vfxFolder
+end
 local remote = Instance.new("RemoteEvent")
 remote.Name = "PlayerMovement"
 remote.Parent = ReplicatedStorage
@@ -74,4 +85,3 @@ StaminaSystem.Depleted:Connect(function(player)
 end)
 
 Players.PlayerRemoving:Connect(function(player) lastRoll[player] = nil end)
-

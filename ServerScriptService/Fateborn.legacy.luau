@@ -38,7 +38,32 @@ local manageCharacters = remote("RemoteFunction", "ManageCharacters")
 local actionRemote = remote("RemoteEvent", "Action")
 local stateRemote = remote("RemoteEvent", "State")
 local announcementRemote = remote("RemoteEvent", "Announcement")
-local vfxRemote = ReplicatedStorage:WaitForChild("VFX"):WaitForChild("VFXEvent")
+local defenseRemote = ReplicatedStorage:FindFirstChild("CombatDefenseEvent")
+if not defenseRemote then
+	defenseRemote = Instance.new("RemoteEvent")
+	defenseRemote.Name = "CombatDefenseEvent"
+	defenseRemote.Parent = ReplicatedStorage
+end
+-- VFX is partly Studio-only content. Rojo may sync the Lua modules while
+-- leaving the runtime remotes absent, so bootstrap only the required channels.
+local vfxFolder = ReplicatedStorage:FindFirstChild("VFX")
+if not vfxFolder then
+	vfxFolder = Instance.new("Folder")
+	vfxFolder.Name = "VFX"
+	vfxFolder.Parent = ReplicatedStorage
+end
+local vfxRemote = vfxFolder:FindFirstChild("VFXEvent")
+if not vfxRemote then
+	vfxRemote = Instance.new("RemoteEvent")
+	vfxRemote.Name = "VFXEvent"
+	vfxRemote.Parent = vfxFolder
+end
+local vfxLocal = vfxFolder:FindFirstChild("VFXLocal")
+if not vfxLocal then
+	vfxLocal = Instance.new("BindableEvent")
+	vfxLocal.Name = "VFXLocal"
+	vfxLocal.Parent = vfxFolder
+end
 
 local function dispatchVFX(effectName, position, color, data)
 	vfxRemote:FireAllClients(effectName, position, color, data)
@@ -1255,7 +1280,7 @@ end
 local EnemyMotion=require(ReplicatedStorage.Shared.EnemyMotion)
 local EnemyActions=require(game.ServerScriptService.EnemyActions)
 local StaminaSystem=require(game.ServerStorage.ZeroScript.StaminaSystem)
-local defenseRemote=ReplicatedStorage:WaitForChild("CombatDefenseEvent")
+-- CombatDefenseEvent is bootstrapped near the other shared remotes above.
 local defenseStates={}
 
 local function fightingMasteryPower(player)

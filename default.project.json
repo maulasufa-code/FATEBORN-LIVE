@@ -1,0 +1,91 @@
+{
+  "name": "FATEBORN-LIVE",
+
+  "emitLegacyScripts": true,
+
+  "syncRules": [
+    {
+      "pattern": "**/*.legacy.luau",
+      "use": "legacyServerScript",
+      "suffix": ".legacy.luau"
+    },
+    {
+      "pattern": "**/*.local.luau",
+      "use": "legacyClientScript",
+      "suffix": ".local.luau"
+    }
+  ],
+
+  "tree": {
+    "$className": "DataModel",
+
+    "ReplicatedFirst": {
+      "$className": "ReplicatedFirst",
+      "$path": "ReplicatedFirst",
+      "$ignoreUnknownInstances": true
+    },
+
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "$path": "ReplicatedStorage",
+      "$ignoreUnknownInstances": true
+    },
+
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "$path": "ServerScriptService",
+      "$ignoreUnknownInstances": true
+    },
+
+    "ServerStorage": {
+      "$className": "ServerStorage",
+      "$path": "ServerStorage",
+      "$ignoreUnknownInstances": true
+    },
+
+    "StarterGui": {
+      "$className": "StarterGui",
+      "$ignoreUnknownInstances": true,
+
+      "HealthHUD": {
+        "$className": "ScreenGui",
+        "$path": "StarterGui/HealthHUD",
+        "$ignoreUnknownInstances": true
+      },
+
+      "StaminaHUD": {
+        "$className": "ScreenGui",
+        "$path": "StarterGui/StaminaHUD",
+        "$ignoreUnknownInstances": true
+      }
+    },
+
+    "StarterPack": {
+      "$className": "StarterPack",
+      "$ignoreUnknownInstances": true,
+
+      "Lantern": {
+        "$className": "Tool",
+        "$path": "StarterPack/Lantern",
+        "$ignoreUnknownInstances": true
+      }
+    },
+
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "$ignoreUnknownInstances": true,
+
+      "StarterCharacterScripts": {
+        "$className": "StarterCharacterScripts",
+        "$path": "StarterPlayer/StarterCharacterScripts",
+        "$ignoreUnknownInstances": true
+      },
+
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "$path": "StarterPlayer/StarterPlayerScripts",
+        "$ignoreUnknownInstances": true
+      }
+    }
+  }
+}
