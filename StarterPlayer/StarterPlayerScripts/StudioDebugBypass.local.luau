@@ -1,0 +1,1 @@
+-- Legacy Studio bypass intentionally disabled. Character selection now follows the normal game flow.

@@ -1,0 +1,1 @@
+-- MainPlayer animation is owned by StarterPlayerScripts.PlayerMovement.
