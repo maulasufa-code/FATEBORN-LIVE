@@ -399,34 +399,95 @@ local function replaceRaceCharacter(player, character)
 		return false
 	end
 
-	local replacement = template:Clone()
+	local templateRoot = template:FindFirstChild("HumanoidRootPart")
+	local templateMesh = template:FindFirstChild("char1")
+	if not templateRoot or not templateRoot:IsA("BasePart")
+		or not templateMesh or not templateMesh:IsA("MeshPart") then
+		warn("FATEBORN race character visual rig is incomplete for", raceName)
+		return false
+	end
+
+	character.Archivable = true
+	local replacement = character:Clone()
 	local humanoid = replacement:FindFirstChildOfClass("Humanoid")
 	local root = replacement:FindFirstChild("HumanoidRootPart")
 	if not humanoid or not root or not root:IsA("BasePart") then
 		replacement:Destroy()
-		warn("FATEBORN race character template is not a usable character for", raceName)
+		warn("FATEBORN default character could not host the race visual for", raceName)
 		return false
+	end
+	local oldVisual = replacement:FindFirstChild("char1")
+	local hostVisualBottom = -humanoid.HipHeight - root.Size.Y * 0.5
+	if oldVisual and oldVisual:IsA("BasePart") then
+		local localPosition = root.CFrame:ToObjectSpace(oldVisual.CFrame).Position
+		hostVisualBottom = localPosition.Y - oldVisual.Size.Y * 0.5
+		oldVisual:Destroy()
 	end
 
 	for _, descendant in ipairs(replacement:GetDescendants()) do
-		if descendant:IsA("BaseScript") then
+		if descendant:IsA("BasePart") then
+			descendant.Transparency = 1
+			descendant.CastShadow = false
+		elseif descendant:IsA("Decal") or descendant:IsA("Texture") then
 			descendant:Destroy()
 		end
 	end
 
-	for _, child in ipairs(character:GetChildren()) do
-		if child:IsA("BaseScript") then
-			child:Clone().Parent = replacement
+	for _, child in ipairs(replacement:GetChildren()) do
+		if child:IsA("ForceField")
+			or child:IsA("Accessory")
+			or child:IsA("Clothing")
+			or child:IsA("ShirtGraphic")
+			or child:IsA("BodyColors") then
+			child:Destroy()
+		end
+	end
+
+	local templateVisualOffset = templateRoot.CFrame:ToObjectSpace(templateMesh.CFrame)
+	local templateVisualBottom = templateVisualOffset.Position.Y - templateMesh.Size.Y * 0.5
+	local visualRoot = Instance.new("Part")
+	visualRoot.Name = "RaceVisualRoot"
+	visualRoot.Size = Vector3.new(0.2, 0.2, 0.2)
+	visualRoot.CFrame = root.CFrame * CFrame.new(0, hostVisualBottom - templateVisualBottom, 0)
+	visualRoot.Transparency = 1
+	visualRoot.CanCollide = false
+	visualRoot.CanTouch = false
+	visualRoot.CanQuery = false
+	visualRoot.Anchored = false
+	visualRoot.Massless = true
+	visualRoot.Parent = replacement
+	local visualRootWeld = Instance.new("WeldConstraint")
+	visualRootWeld.Name = "RaceVisualRootWeld"
+	visualRootWeld.Part0 = root
+	visualRootWeld.Part1 = visualRoot
+	visualRootWeld.Parent = visualRoot
+
+	local visual = templateMesh:Clone()
+	visual.CFrame = visualRoot.CFrame * templateVisualOffset
+	visual.Transparency = 0
+	visual.CastShadow = true
+	visual.CanCollide = false
+	visual.CanTouch = false
+	visual.Massless = true
+	visual.Parent = replacement
+	local visualWeld = Instance.new("WeldConstraint")
+	visualWeld.Name = "RaceVisualWeld"
+	visualWeld.Part0 = visualRoot
+	visualWeld.Part1 = visual
+	visualWeld.Parent = visual
+	for _, child in ipairs(templateRoot:GetChildren()) do
+		if child:IsA("Bone") then
+			child:Clone().Parent = visualRoot
 		end
 	end
 
 	if not humanoid:FindFirstChildOfClass("Animator") then
 		Instance.new("Animator", humanoid)
 	end
-	humanoid.RequiresNeck = false
 	replacement.Name = player.Name
 	replacement.PrimaryPart = root
 	replacement:SetAttribute("Race", raceName)
+	replacement:SetAttribute("PlayerModelAssetId", characterProfile.AssetId)
 	replacement:SetAttribute("RaceCharacterProfile", raceName)
 	replacement:SetAttribute("RaceCharacterAssetId", characterProfile.AssetId)
 	replacement:SetAttribute("FatebornBoneCharacter", characterProfile.BoneCharacter == true)

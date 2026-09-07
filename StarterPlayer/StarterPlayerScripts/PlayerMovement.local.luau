@@ -12,6 +12,14 @@ local RaceCharacterModels = require(
 
 local rigs = {}
 
+-- Existing FATEBORN bone characters use these published Meshy clips. A race
+-- profile replaces this set only when it explicitly supplies its own clips.
+local defaultBoneAnimations = {
+	Walk = { Id = "rbxassetid://92954261547077" },
+	Run = { Id = "rbxassetid://85618915186426" },
+	Roll = { Id = "rbxassetid://137733801815535" },
+}
+
 local sprint = false
 
 local function isReactionLocked()
@@ -133,9 +141,7 @@ local function register(character)
 
 	local raceName = character:GetAttribute("RaceCharacterProfile")
 	local characterProfile = RaceCharacterModels.getProfile(raceName)
-	if not characterProfile then
-		return
-	end
+	local animationProfile = characterProfile and characterProfile.Animations or defaultBoneAnimations
 
 	local humanoid = character:WaitForChild(
 		"Humanoid",
@@ -224,13 +230,20 @@ local function register(character)
 
 	if character == player.Character then
 
+		-- Race characters are assigned manually by the server. Reassert the
+		-- normal Roblox camera subject after the old character is removed.
+		local camera = workspace.CurrentCamera
+		if camera then
+			camera.CameraSubject = humanoid
+		end
+
 		-- Kita atur rotasi sendiri supaya
 		-- perubahan WASD bisa di-blend.
 		humanoid.AutoRotate = false
 
 		if animator then
 
-			for name, animationData in pairs(characterProfile.Animations) do
+			for name, animationData in pairs(animationProfile) do
 
 				local id = animationData.Id
 				rig.nativeIds[id] = true

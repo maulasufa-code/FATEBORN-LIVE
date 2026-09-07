@@ -96,7 +96,7 @@ local function bindCharacter(newCharacter)
 	root = nil
 
 	if character then
-		root = character:WaitForChild("HumanoidRootPart", 5)
+		root = character:FindFirstChild("HumanoidRootPart")
 	end
 end
 
@@ -113,6 +113,18 @@ player:GetAttributeChangedSignal("Stamina"):Connect(updateFill)
 player:GetAttributeChangedSignal("MaxStamina"):Connect(updateFill)
 
 RunService.RenderStepped:Connect(function()
+	-- Custom race visuals can replace Player.Character without reliably
+	-- delivering a second CharacterAdded event. Keep the HUD bound to the
+	-- actual current character so every race gets the same stamina display.
+	if character ~= player.Character then
+		bindCharacter(player.Character)
+		updateFill()
+	end
+
+	if character then
+		root = root or character:FindFirstChild("HumanoidRootPart")
+	end
+
 	if player:GetAttribute("GameplayActive") ~= true then
 		if hud then hud.Visible = false end
 		return

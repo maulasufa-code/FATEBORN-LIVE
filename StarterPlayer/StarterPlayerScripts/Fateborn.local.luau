@@ -830,6 +830,10 @@ selectedTitle = label(resultArea, "ABILITY", UDim2.new(1, -40, 0, 30), UDim2.fro
 local resultWheel, wheelRing = createCircularWheel(resultArea, 320, UDim2.new(0.5, -160, 0, 34), 32)
 local raceWheel, raceDisc, racePointer = createRaceWheel(resultArea, 350, UDim2.new(0.5, -175, 0, 18), 32)
 raceWheel.Visible = false
+local raceWheelBackground = raceWheel:FindFirstChild("BackgroundImage")
+if raceWheelBackground then
+	raceWheelBackground.Visible = false
+end
 selectedValue = label(resultArea, "—", UDim2.new(0, 150, 0, 42), UDim2.new(0.5, -75, 0, 161), Enum.Font.GothamBlack, COLORS.Text, 19, Enum.TextXAlignment.Center)
 selectedValue.ZIndex = 36
 selectedValue.Visible = false
@@ -1411,20 +1415,17 @@ reveal.ZIndex = 102
 
 local birthCategoryIndex = 1
 
-local function findNextBirthCategory(startIndex)
+local function findNextBirthCategory()
 	if not currentState or not currentState.Fate then
 		return nil
 	end
-	for index = startIndex or 1, #Config.Categories do
-		if not currentState.Fate[Config.Categories[index]] then
-			return index
-		end
+
+	-- Character creation only assigns Race. Every later Fate category, including
+	-- Potential, is unlocked through its existing quest/story requirement.
+	if not currentState.Fate.Race then
+		return 1
 	end
-	for index = 1, (startIndex or 1) - 1 do
-		if not currentState.Fate[Config.Categories[index]] then
-			return index
-		end
-	end
+
 	return nil
 end
 
@@ -1455,7 +1456,7 @@ end
 local function playIntro()
 	reveal.Text = ""
 
-	local nextIndex = findNextBirthCategory(1)
+	local nextIndex = findNextBirthCategory()
 
 	if not nextIndex then
 		introRunning = false
