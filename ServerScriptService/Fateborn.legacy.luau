@@ -1782,10 +1782,41 @@ game:BindToClose(function()
 	task.wait(2)
 end)
 
--- The world is authored in Workspace.  The old prototype bootstrap generated
--- FATEBORN_WORLD (placeholder terrain, spawn pad, signage, and NPCs) at every
--- server start, which would overlap the authored map and replace Lighting.
--- Keep the legacy helpers dormant until explicit Workspace spawn markers are
--- wired to the enemy system.
+-- The terrain prototype (createWorld) stays dormant: the world is authored in
+-- Workspace.  Only enemy population and zone signage are bootstrapped here.
+local old = workspace:FindFirstChild("FATEBORN_WORLD")
+if old then
+	old:Destroy()
+end
+worldFolder = Instance.new("Folder")
+worldFolder.Name = "FATEBORN_WORLD"
+worldFolder.Parent = workspace
+
+spawnDefinitions = {
+	{ Type = "Wanderer", Position = Vector3.new(-22, 3, -105), Respawn = 7 },
+	{ Type = "Wanderer", Position = Vector3.new(24, 3, -122), Respawn = 7 },
+	{ Type = "Wanderer", Position = Vector3.new(-18, 3, -160), Respawn = 7 },
+	{ Type = "FateHound", Position = Vector3.new(25, 3, -188), Respawn = 9 },
+	{ Type = "FateHound", Position = Vector3.new(-26, 3, -230), Respawn = 9 },
+	{ Type = "AshKnight", Position = Vector3.new(175, 3, -155), Respawn = 11 },
+	{ Type = "AshKnight", Position = Vector3.new(246, 3, -170), Respawn = 11 },
+	{ Type = "RiftCultist", Position = Vector3.new(290, 3, -245), Respawn = 13 },
+	{ Type = "RiftCultist", Position = Vector3.new(188, 3, -280), Respawn = 13 },
+	{ Type = "FallenKing", Position = Vector3.new(230, 5, -385), Respawn = 45 },
+}
+
+local function zoneSign(name, cframe, title, subtitle, color)
+	local sign = makePart(worldFolder, name, Vector3.new(1, 1, 1), cframe, Color3.new(), Enum.Material.SmoothPlastic)
+	sign.Transparency = 1
+	sign.CanCollide = false
+	floatingLabel(sign, title, subtitle, color)
+end
+zoneSign("VillageSign", CFrame.new(0, 2, -75), "FORGOTTEN VILLAGE", "Lv. 1+ • Wanderers and Fate Hounds", Color3.fromRGB(219, 222, 231))
+zoneSign("ForestSign", CFrame.new(135, 2, -140), "DEMON FOREST", "Lv. 8+ • Ash Knights and Rift Cultists", Color3.fromRGB(199, 92, 140))
+zoneSign("BossSign", CFrame.new(230, 2, -385), "THE FALLEN KING", "World Boss • Three phases", Color3.fromRGB(255, 181, 72))
+
+for index = 1, #spawnDefinitions do
+	createEnemy(index)
+end
 
 print("FATEBORN server ready —", Config.Version)
