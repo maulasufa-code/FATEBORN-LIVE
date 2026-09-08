@@ -35,6 +35,8 @@ local templateAliases = {
 	WaterSplash = "Water.SPLASH", WaterImpact = "Water.C - STRONG WATER SPRAY", WaterTrail = "Water.A - STEADY RIPPLE",
 	WaterBurst = "Water.B - WATER SPRAY", WaterAura = "Water.E - STEAM",
 	BlackHoleA = "BlackHole.03 - BLACK HOLE [A]", BlackHoleB = "BlackHole.04 - BLACK HOLE [B]",
+	GroundRing = "Misc.Ground2", AuraBurst = "Misc.Aura", ChargeRing = "Misc.G - CHARGE",
+	PowerVortex = "Misc.L - POWER", ShockBubble = "Misc.I - SHOCK BUBBLE",
 }
 
 local container = workspace:FindFirstChild("ClientVFX")
@@ -247,11 +249,49 @@ local function playMovement(name, position, color, data)
 	end
 end
 
+-- Skill layers intentionally reuse only imported templates.  Slot one is an
+-- impact-only accent; its normal hit confirmation is emitted by CombatHit.
+local function playSkill(position, color, data)
+	local slot = data.Slot
+	if slot == 1 then
+		if data.Hit then
+			emitTemplate("ImpactLarge", position, color, {
+				Scale = 0.72, Density = 0.42, LifetimeScale = 0.52, SpeedScale = 0.62,
+			})
+		end
+		return true
+	elseif slot == 3 then
+		emitMany({
+			{ Template = "GroundRing", Scale = 1.05, Density = 0.72, LifetimeScale = 0.42 },
+			{ Template = "AuraBurst", Scale = 0.52, Density = 0.28, LifetimeScale = 0.42, SpeedScale = 0.48 },
+		}, position, color)
+		return true
+	elseif slot == 4 then
+		emitMany({
+			{ Template = "GroundRing", Scale = 1.35, Density = 0.8, LifetimeScale = 0.5 },
+			{ Template = "AuraBurst", Scale = 0.68, Density = 0.38, LifetimeScale = 0.46, SpeedScale = 0.5 },
+			{ Template = "ChargeRing", Scale = 0.72, Density = 0.38, LifetimeScale = 0.55, SpeedScale = 0.5 },
+		}, position, color)
+		return true
+	elseif slot == 5 then
+		emitMany({
+			{ Template = "GroundRing", Scale = 1.8, Density = 0.9, LifetimeScale = 0.55 },
+			{ Template = "PortalA", Scale = 0.9, Density = 0.38, LifetimeScale = 0.38 },
+			{ Template = "ShockBubble", Scale = 1.05, Density = 0.5, LifetimeScale = 0.5 },
+			{ Template = "PowerVortex", Scale = 0.56, Density = 0.34, LifetimeScale = 0.18 },
+			{ Template = "LightningArc", Scale = 0.9, Density = 0.45, LifetimeScale = 0.5, Brightness = 0.72 },
+		}, position, color)
+		return true
+	end
+	return false
+end
+
 local function play(kind, position, color, data)
 	if typeof(position) ~= "Vector3" then return end
 	data = data or {}
 	local presetName = kind
 	if kind == "Skill" then
+		if playSkill(position, color, data) then return end
 		local mode = data.Mode
 		presetName = mode == "Projectile" and "Projectile"
 			or mode == "Line" and "Beam"

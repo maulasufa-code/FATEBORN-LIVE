@@ -32,7 +32,12 @@ local function toggle()
  task.defer(sync)
 end
 slot.Activated:Connect(toggle)
-UserInputService.InputBegan:Connect(function(input,processed) if not processed and input.KeyCode==Enum.KeyCode.One then toggle() end end)
+UserInputService.InputBegan:Connect(function(input)
+ if input.KeyCode~=Enum.KeyCode.One then return end
+ if UserInputService:GetFocusedTextBox() then return end
+ if player:GetAttribute("GameplayActive")==false then return end
+ toggle()
+end)
 player.CharacterAdded:Connect(function(character)
  character.ChildAdded:Connect(function(x) if x.Name=="Lantern" then task.defer(sync) end end)
  character.ChildRemoved:Connect(function(x) if x.Name=="Lantern" then task.defer(sync) end end)

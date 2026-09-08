@@ -54,6 +54,11 @@ local Assets = {
 		PrestigeAura = "Misc.PrestigeAura",
 		Quickstep = "Misc.Quickstep",
 		ArcaneTrace = "Misc.ArcaneTrace",
+		GroundRing = "Misc.Ground2",
+		AuraBurst = "Misc.Aura",
+		ChargeRing = "Misc.G - CHARGE",
+		PowerVortex = "Misc.L - POWER",
+		ShockBubble = "Misc.I - SHOCK BUBBLE",
 	},
 }
 

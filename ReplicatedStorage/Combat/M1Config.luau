@@ -607,6 +607,33 @@ function Config.GetSpeedMult(character)
 end
 
 
+-- Grade-only timing used by the live Fateborn Basic path. The broader
+-- GetAttackInterval/GetHitDelay helpers also include the legacy race M1
+-- profile, whose race list is not aligned with Shared.Config.
+function Config.GetSpeedAttackInterval(character)
+
+	local speed = Config.GetSpeedMult(character)
+
+	return math.clamp(
+		0.42 / speed,
+		Config.MinAttackInterval,
+		Config.MaxAttackInterval
+	)
+end
+
+
+function Config.GetSpeedHitDelay(character)
+
+	local speed = Config.GetSpeedMult(character)
+
+	return math.clamp(
+		0.12 / speed,
+		0.055,
+		0.14
+	)
+end
+
+
 function Config.GetDurabilityDamageTaken(character)
 
 	local value = readAttribute(character, {

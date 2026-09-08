@@ -12,11 +12,13 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local ServerStorage = game:GetService("ServerStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local M1Config = require(ReplicatedStorage:WaitForChild("Combat"):WaitForChild("M1Config")) -- Live Basic timing/combo/mitigation
 local RaceCharacterModels = require(
 	ReplicatedStorage:WaitForChild("ZeroScript"):WaitForChild("Data"):WaitForChild("RaceCharacterModels")
 )
 local HitReactionSystem = require(ServerStorage:WaitForChild("ZeroScript"):WaitForChild("HitReactionSystem"))
 local EnemyAISystem = require(ServerStorage:WaitForChild("ZeroScript"):WaitForChild("EnemyAISystem"))
+local StaminaSystem = require(ServerStorage:WaitForChild("ZeroScript"):WaitForChild("StaminaSystem"))
 local rng = Random.new()
 
 local remoteFolder = Instance.new("Folder")
@@ -103,6 +105,7 @@ local profiles = {}
 local accounts = {}
 local activeSlots = {}
 local cooldowns = {}
+local basicComboStates = {}
 local respawnQueued = {}
 local boostCache = {}
 local enemies = {}
@@ -610,7 +613,7 @@ end
 
 local function applyCharacter(player, character)
 	local profile = profiles[player]
-	if not profile or not profile.Fate.Durability or not profile.Fate.Speed or not profile.Fate.Ability then
+	if not profile then
 		return
 	end
 	local humanoid = character:WaitForChild("Humanoid", 10)
@@ -618,48 +621,62 @@ local function applyCharacter(player, character)
 	if not humanoid or not root then
 		return
 	end
-	local durability = profile.Fate.Durability.Power or 1
-	local speed = profile.Fate.Speed.Power or 1
+	local durability = profile.Fate.Durability and profile.Fate.Durability.Power or 1
+	local speed = profile.Fate.Speed and profile.Fate.Speed.Power or 1
+	local stamina = profile.Fate.Stamina and profile.Fate.Stamina.Power or 1
+	local strength = profile.Fate.Strength and profile.Fate.Strength.Power or 1
+	local fightingMastery = profile.Fate.FightingMastery and profile.Fate.FightingMastery.Power or 1
+	local race = profile.Fate.Race and profile.Fate.Race.Name
+	character:SetAttribute("StrengthPower", strength)
+	character:SetAttribute("SpeedPower", speed)
 	character:SetAttribute("DurabilityPower", durability)
+	character:SetAttribute("FightingMasteryPower", fightingMastery)
+	character:SetAttribute("Race", race)
 	humanoid.MaxHealth = math.floor((100 + profile.Level * 7) * durability)
 	humanoid.Health = humanoid.MaxHealth
+	local maxStamina = math.floor(StaminaSystem.Config.MaxStamina * stamina)
+	player:SetAttribute("MaxStamina", maxStamina)
+	player:SetAttribute("Stamina", maxStamina)
 	humanoid.WalkSpeed = math.clamp(14 * speed, 12, 24)
 	character:SetAttribute("BaseWalkSpeed", humanoid.WalkSpeed)
 	character:SetAttribute("Sprinting", false)
 	character:SetAttribute("Dashing", false)
 	humanoid.JumpPower = math.clamp(50 * (0.94 + speed * 0.08), 45, 65)
 
-	local accent = Color3.fromRGB(255, 178, 46)
-	for _, item in ipairs(Config.Pools.Ability) do
-		if item.Name == profile.Fate.Ability.Name then
-			accent = item.Accent
-			break
+	local ability = profile.Fate.Ability
+	if ability then
+		local accent = Color3.fromRGB(255, 178, 46)
+		for _, item in ipairs(Config.Pools.Ability) do
+			if item.Name == ability.Name then
+				accent = item.Accent
+				break
+			end
 		end
-	end
-	for _, oldName in ipairs({ "FateAura", "PrestigeAura" }) do
-		local old = root:FindFirstChild(oldName)
-		if old then
-			old:Destroy()
+		for _, oldName in ipairs({ "FateAura", "PrestigeAura" }) do
+			local old = root:FindFirstChild(oldName)
+			if old then
+				old:Destroy()
+			end
 		end
-	end
-	local light = Instance.new("PointLight")
-	light.Name = "FateAura"
-	light.Color = accent
-	light.Range = 8 + Config.GetRarityRank(profile.Fate.Ability.Rarity) * 2
-	light.Brightness = math.max(0.4, Config.GetRarityRank(profile.Fate.Ability.Rarity) * 0.35)
-	light.Parent = root
+		local light = Instance.new("PointLight")
+		light.Name = "FateAura"
+		light.Color = accent
+		light.Range = 8 + Config.GetRarityRank(ability.Rarity) * 2
+		light.Brightness = math.max(0.4, Config.GetRarityRank(ability.Rarity) * 0.35)
+		light.Parent = root
 
-	if Config.GetRarityRank(profile.Fate.Ability.Rarity) >= 4 then
-		local particles = Instance.new("ParticleEmitter")
-		particles.Name = "PrestigeAura"
-		particles.Texture = "rbxasset://textures/particles/sparkles_main.dds"
-		particles.Color = ColorSequence.new(accent)
-		particles.LightEmission = 0.8
-		particles.Rate = 6 + Config.GetRarityRank(profile.Fate.Ability.Rarity) * 2
-		particles.Lifetime = NumberRange.new(0.5, 1.2)
-		particles.Speed = NumberRange.new(0.5, 2)
-		particles.SpreadAngle = Vector2.new(180, 180)
-		particles.Parent = root
+		if Config.GetRarityRank(ability.Rarity) >= 4 then
+			local particles = Instance.new("ParticleEmitter")
+			particles.Name = "PrestigeAura"
+			particles.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+			particles.Color = ColorSequence.new(accent)
+			particles.LightEmission = 0.8
+			particles.Rate = 6 + Config.GetRarityRank(ability.Rarity) * 2
+			particles.Lifetime = NumberRange.new(0.5, 1.2)
+			particles.Speed = NumberRange.new(0.5, 2)
+			particles.SpreadAngle = Vector2.new(180, 180)
+			particles.Parent = root
+		end
 	end
 
 	addBillboard(character, player)
@@ -1018,7 +1035,7 @@ local function getAliveRoot(player)
 	return nil
 end
 
-local function damageEnemy(player, model, amount, reactionKind, knockback)
+local function damageEnemy(player, model, amount, reactionKind, knockback, impactColor)
 	local humanoid = model and model:FindFirstChildOfClass("Humanoid")
 	local root = model and model:FindFirstChild("HumanoidRootPart")
 	local playerRoot = getAliveRoot(player)
@@ -1046,6 +1063,9 @@ local function damageEnemy(player, model, amount, reactionKind, knockback)
 
 	model:SetAttribute("LastHitUserId", player.UserId)
 	humanoid:TakeDamage(amount)
+	dispatchVFX("CombatHit", root.Position, impactColor or Color3.fromRGB(155, 190, 205), {
+		SourceUserId = player.UserId,
+	})
 
 	if humanoid.Health > 0 then
 		dispatchVFX("HitReaction", root.Position, Color3.fromRGB(255, 128, 92), { Reaction = reactionKind or "Light" })
@@ -1102,28 +1122,67 @@ end
 local function basicAttack(player, direction)
 	local profile = profiles[player]
 	local root = getAliveRoot(player)
-	if not profile or not root or not checkCooldown(player, "Basic", 0.55) then
+	local character = player.Character
+	if not profile or not root or not character then
 		return
 	end
-	local best, bestDistance
-	for _, model in ipairs(targetsNear(root.Position, 12)) do
-		local enemyRoot = model:FindFirstChild("HumanoidRootPart")
-		local offset = enemyRoot.Position - root.Position
-		local dot = direction.Unit:Dot(offset.Unit)
-		if dot > 0.2 and (not bestDistance or offset.Magnitude < bestDistance) then
-			best = model
-			bestDistance = offset.Magnitude
-		end
+
+	local attackInterval = M1Config.GetSpeedAttackInterval(character)
+	if not checkCooldown(player, "Basic", attackInterval) then
+		return
 	end
+
+	local now = os.clock()
+	local comboLimit = M1Config.GetMasteryComboCap(character)
+	local comboResetTime = math.max(0.82, attackInterval * 2.8)
+	local comboState = basicComboStates[player]
+	if not comboState or comboState.Character ~= character or now - comboState.LastAttack > comboResetTime then
+		comboState = { Character = character, Index = 0, LastAttack = -math.huge }
+		basicComboStates[player] = comboState
+	end
+	comboState.Index = comboState.Index % comboLimit + 1
+	comboState.LastAttack = now
+
+	local comboIndex = comboState.Index
+	if comboIndex == comboLimit then
+		cooldowns[player].Basic = now + comboResetTime
+		comboState.Index = 0
+	end
+	local comboCurve = M1Config.ComboDamage[comboLimit] or M1Config.ComboDamage[4]
+	local comboMultiplier = comboCurve[comboIndex] or 1
+	local masteryMultiplier = M1Config.GetMasteryDamageMult(character)
+	local hitDelay = M1Config.GetSpeedHitDelay(character)
 	local color = abilityColor(profile)
 	dispatchVFX("Slash", root.Position + direction.Unit * 3 + Vector3.new(0, 1.5, 0), color, {
 		SourceUserId = player.UserId,
 		Direction = direction,
 	})
-	if best then
-		damageEnemy(player, best, baseDamage(profile), "Light")
-		dispatchVFX("CombatHit", best.HumanoidRootPart.Position, color, { SourceUserId = player.UserId })
-	end
+
+	task.delay(hitDelay, function()
+		if profiles[player] ~= profile or player.Character ~= character then
+			return
+		end
+		local currentRoot = getAliveRoot(player)
+		if not currentRoot then
+			return
+		end
+
+		local best, bestDistance
+		for _, model in ipairs(targetsNear(currentRoot.Position, 12)) do
+			local enemyRoot = model:FindFirstChild("HumanoidRootPart")
+			local offset = enemyRoot.Position - currentRoot.Position
+			local dot = direction.Unit:Dot(offset.Unit)
+			if dot > 0.2 and (not bestDistance or offset.Magnitude < bestDistance) then
+				best = model
+				bestDistance = offset.Magnitude
+			end
+		end
+
+		if best then
+			local damage = baseDamage(profile) * masteryMultiplier * comboMultiplier
+			damageEnemy(player, best, damage, "Light", nil, color)
+		end
+	end)
 end
 
 local function useAbility(player, slot, direction)
@@ -1140,6 +1199,7 @@ local function useAbility(player, slot, direction)
 	local color = abilityColor(profile)
 	local damage = baseDamage(profile) * move.Damage
 	local center = root.Position
+	local hit = false
 	if move.Mode == "Dash" then
 		local travel = direction.Unit * move.Range
 		root.CFrame = CFrame.new(root.Position + travel, root.Position + travel + direction.Unit)
@@ -1162,7 +1222,7 @@ local function useAbility(player, slot, direction)
 		end
 		if best then
 			center = best.HumanoidRootPart.Position
-			damageEnemy(player, best, damage, "Heavy")
+			hit = damageEnemy(player, best, damage, "Heavy", nil, color)
 		end
 	else
 		center = root.Position + direction.Unit * math.min(14, move.Range * 0.4)
@@ -1171,11 +1231,13 @@ local function useAbility(player, slot, direction)
 		for _, model in ipairs(targetsNear(center, move.Range)) do
 			local reactionKind = move.Mode == "Awakening" and "Finisher" or "Heavy"
 			local knockback = reactionKind == "Finisher" and 65 or nil
-			damageEnemy(player, model, damage, reactionKind, knockback)
+			hit = damageEnemy(player, model, damage, reactionKind, knockback, color) or hit
 		end
 	end
 	dispatchVFX("Skill", center, color, {
 		SourceUserId = player.UserId,
+		Slot = slot,
+		Hit = hit,
 		Mode = move.Mode,
 		Direction = direction,
 		Radius = move.Mode == "Awakening" and move.Range * 2 or math.clamp(move.Range, 8, 32),
@@ -1362,7 +1424,6 @@ end
 
 local EnemyMotion=require(ReplicatedStorage.Shared.EnemyMotion)
 local EnemyActions=require(game.ServerScriptService.EnemyActions)
-local StaminaSystem=require(game.ServerStorage.ZeroScript.StaminaSystem)
 -- CombatDefenseEvent is bootstrapped near the other shared remotes above.
 local defenseStates={}
 
@@ -1422,9 +1483,12 @@ local function resolveIncomingDamage(player,attackerModel,damage,reactionKind,hi
 	if not playerRoot or not playerHumanoid then return false end
 	local state=defenseStates[player]
 	local attackerRoot=attackerModel and attackerModel:FindFirstChild("HumanoidRootPart")
+	local rawDamage=math.max(0,tonumber(damage) or 0)
+	local durabilityMultiplier=M1Config.GetDurabilityDamageTaken(player.Character)
+	local finalDamage=rawDamage*durabilityMultiplier
 
 	if not state or not state.Blocking or StaminaSystem.Get(player)<=0 then
-		playerHumanoid:TakeDamage(damage)
+		playerHumanoid:TakeDamage(finalDamage)
 		dispatchVFX("HitLight", playerRoot.Position + Vector3.new(0, 1.5, 0), Color3.fromRGB(255, 128, 92), {
 			SourceUserId = attackerModel and attackerModel:GetAttribute("OwnerUserId"),
 		})
@@ -1437,7 +1501,7 @@ local function resolveIncomingDamage(player,attackerModel,damage,reactionKind,hi
 	if attackerRoot then
 		local offset=attackerRoot.Position-playerRoot.Position
 		if offset.Magnitude>0 and playerRoot.CFrame.LookVector:Dot(offset.Unit)<-.2 then
-			playerHumanoid:TakeDamage(damage)
+			playerHumanoid:TakeDamage(finalDamage)
 			dispatchVFX("HitLight", playerRoot.Position + Vector3.new(0, 1.5, 0), Color3.fromRGB(255, 128, 92), {
 				SourceUserId = attackerModel and attackerModel:GetAttribute("OwnerUserId"),
 			})
@@ -1468,7 +1532,7 @@ local function resolveIncomingDamage(player,attackerModel,damage,reactionKind,hi
 		return false
 	end
 
-	playerHumanoid:TakeDamage(damage*.28)
+	playerHumanoid:TakeDamage(finalDamage*.28)
 	local blockPosition = attackerRoot and attackerRoot.Position or playerRoot.Position
 	defenseRemote:FireClient(player,"Block",blockPosition)
 	dispatchVFX("Block", blockPosition, Color3.fromRGB(99, 180, 255), { SourceUserId = player.UserId })
@@ -1685,6 +1749,7 @@ Players.PlayerRemoving:Connect(function(player)
 	accounts[player] = nil
 	activeSlots[player] = nil
 	cooldowns[player] = nil
+	basicComboStates[player] = nil
 	respawnQueued[player] = nil
 	boostCache[player] = nil
 end)
@@ -1717,9 +1782,10 @@ game:BindToClose(function()
 	task.wait(2)
 end)
 
-createWorld()
-for index = 1, #spawnDefinitions do
-	createEnemy(index)
-end
+-- The world is authored in Workspace.  The old prototype bootstrap generated
+-- FATEBORN_WORLD (placeholder terrain, spawn pad, signage, and NPCs) at every
+-- server start, which would overlap the authored map and replace Lighting.
+-- Keep the legacy helpers dormant until explicit Workspace spawn markers are
+-- wired to the enemy system.
 
 print("FATEBORN server ready —", Config.Version)
