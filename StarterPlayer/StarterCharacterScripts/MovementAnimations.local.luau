@@ -5,6 +5,9 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local character = script.Parent
+-- Half-Beast uses the cached tracks in PlayerMovement.local.luau. Do not load
+-- a competing generic dash track for that race visual.
+if character:GetAttribute("FatebornBoneCharacter") == true then return end
 local humanoid = character:WaitForChild("Humanoid", 10)
 if not humanoid then return end
 

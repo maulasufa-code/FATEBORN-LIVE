@@ -22,6 +22,87 @@ local defaultBoneAnimations = {
 
 local sprint = false
 
+local animationSettings = {
+	Idle = { Priority = Enum.AnimationPriority.Idle, Looped = true },
+	Walk = { Priority = Enum.AnimationPriority.Movement, Looped = true },
+	Run = { Priority = Enum.AnimationPriority.Movement, Looped = true },
+	Jump = { Priority = Enum.AnimationPriority.Movement, Looped = false },
+	RunningJump = { Priority = Enum.AnimationPriority.Movement, Looped = false },
+	Fall = { Priority = Enum.AnimationPriority.Movement, Looped = true },
+	Climb = { Priority = Enum.AnimationPriority.Movement, Looped = true },
+	Swim = { Priority = Enum.AnimationPriority.Movement, Looped = true },
+	SwimIdle = { Priority = Enum.AnimationPriority.Movement, Looped = true },
+	Block = { Priority = Enum.AnimationPriority.Action, Looped = true },
+	Guard = { Priority = Enum.AnimationPriority.Action, Looped = true },
+	BasicAttack = { Priority = Enum.AnimationPriority.Action2, Looped = false },
+	M1_1 = { Priority = Enum.AnimationPriority.Action2, Looped = false },
+	M1_2 = { Priority = Enum.AnimationPriority.Action2, Looped = false },
+	M1_3 = { Priority = Enum.AnimationPriority.Action2, Looped = false },
+	M1_4 = { Priority = Enum.AnimationPriority.Action2, Looped = false },
+	M1_5 = { Priority = Enum.AnimationPriority.Action2, Looped = false },
+	M1_6 = { Priority = Enum.AnimationPriority.Action2, Looped = false },
+	Roll = { Priority = Enum.AnimationPriority.Action2, Looped = false },
+	Backstep = { Priority = Enum.AnimationPriority.Action2, Looped = false },
+	SpellCast = { Priority = Enum.AnimationPriority.Action2, Looped = false },
+	SlidingStumble = { Priority = Enum.AnimationPriority.Action3, Looped = false },
+	IdleStumble = { Priority = Enum.AnimationPriority.Action3, Looped = false },
+	Drink = { Priority = Enum.AnimationPriority.Action, Looped = false },
+	Death = { Priority = Enum.AnimationPriority.Action4, Looped = false },
+}
+
+local function stopTrack(track, fadeTime)
+	if track and track.IsPlaying then
+		track:Stop(fadeTime or 0.08)
+	end
+end
+
+local function playState(rig, name, fadeTime, restart)
+	local track = rig.tracks[name]
+	if not track then
+		return false
+	end
+
+	if restart and track.IsPlaying then
+		track:Stop(0)
+	end
+	if restart then
+		track.TimePosition = 0
+	end
+
+	for otherName, otherTrack in pairs(rig.tracks) do
+		if otherName ~= name then
+			stopTrack(otherTrack, fadeTime)
+		end
+	end
+
+	if not track.IsPlaying or restart then
+		track:Play(fadeTime or 0.1)
+	end
+
+	rig.currentState = name
+	return true
+end
+
+local function playAction(rig, name, duration, fadeTime)
+	if playState(rig, name, fadeTime or 0.04, true) then
+		rig.actionName = name
+		rig.actionUntil = duration == math.huge
+			and math.huge
+			or workspace:GetServerTimeNow() + duration
+	end
+end
+
+local function setBoneRotation(rig, name, x, y, z)
+	local boneData = rig.bones[name]
+	if not boneData then
+		return
+	end
+
+	boneData.bone.Transform = boneData.bind:Inverse()
+		* CFrame.Angles(x or 0, y or 0, z or 0)
+		* boneData.bind
+end
+
 local function isReactionLocked()
 	local character = player.Character
 	if not character then
@@ -124,10 +205,112 @@ UserInputService.WindowFocusReleased:Connect(function()
 	setSprint(false)
 end)
 
+--==================================================
+-- JUMP
+--==================================================
+-- Jump input is owned here for Half-Beast so idle, walk, and sprint all use
+-- exactly the same physical takeoff path. Sprint only selects the visual clip.
+local JUMP_INPUT_DEBOUNCE = 0.10
+local JUMP_VISUAL_HOLD = 0.24
+
+local function canStartJump(humanoid)
+	if humanoid.Health <= 0 or humanoid.Sit or humanoid.PlatformStand then
+		return false
+	end
+
+	local state = humanoid:GetState()
+	if state == Enum.HumanoidStateType.Jumping
+		or state == Enum.HumanoidStateType.Freefall
+		or state == Enum.HumanoidStateType.FallingDown
+		or state == Enum.HumanoidStateType.Dead
+		or state == Enum.HumanoidStateType.Swimming
+		or state == Enum.HumanoidStateType.Climbing then
+		return false
+	end
+
+	return humanoid.FloorMaterial ~= Enum.Material.Air
+		or state == Enum.HumanoidStateType.Running
+		or state == Enum.HumanoidStateType.RunningNoPhysics
+		or state == Enum.HumanoidStateType.Landed
+end
+
+local function commandHalfBeastJump()
+	local character = player.Character
+	local rig = character and rigs[character]
+	if not character or not rig then
+		return
+	end
+
+	local humanoid = rig.humanoid
+	local root = rig.root
+	local serverNow = workspace:GetServerTimeNow()
+	local rollDuration = rig.tuning.RollGameplayDuration or 0.6
+
+	if not canStartJump(humanoid)
+		or serverNow < (character:GetAttribute("HitReactionUntil") or -math.huge)
+		or serverNow - (character:GetAttribute("RollStartedAt") or -100) < rollDuration then
+		return
+	end
+
+	local inputNow = os.clock()
+	if inputNow - (rig.lastJumpInputAt or -math.huge) < JUMP_INPUT_DEBOUNCE then
+		return
+	end
+	rig.lastJumpInputAt = inputNow
+
+	local sprintingAtTakeoff = sprint or character:GetAttribute("Sprinting") == true
+	rig.jumpAnimationName = sprintingAtTakeoff and "RunningJump" or "Jump"
+	rig.jumpStartedAt = serverNow
+	rig.jumpCommandedAt = serverNow
+
+	-- Same takeoff for idle/walk/sprint. This explicitly starts the Humanoid jump
+	-- and preserves the existing horizontal velocity.
+	humanoid.Jump = true
+	humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+
+	local jumpVelocity
+	if humanoid.UseJumpPower then
+		jumpVelocity = humanoid.JumpPower
+	else
+		jumpVelocity = math.sqrt(math.max(0, 2 * workspace.Gravity * humanoid.JumpHeight))
+	end
+
+	local velocity = root.AssemblyLinearVelocity
+	if velocity.Y < jumpVelocity then
+		root.AssemblyLinearVelocity = Vector3.new(velocity.X, jumpVelocity, velocity.Z)
+	end
+
+	playState(rig, rig.jumpAnimationName, 0.03, true)
+end
+
+-- Explicit Space/ButtonA binding removes any dependency on Shift/Ctrl or on a
+-- default player-script jump binding. We own this input and sink only Jump.
+ContextActionService:BindActionAtPriority(
+	"MainPlayerJump",
+	function(_, state)
+		local character = player.Character
+		if not character or not rigs[character] then
+			return Enum.ContextActionResult.Pass
+		end
+
+		if state == Enum.UserInputState.Begin
+			and not UserInputService:GetFocusedTextBox() then
+			commandHalfBeastJump()
+		end
+		return Enum.ContextActionResult.Sink
+	end,
+	false,
+	5001,
+	Enum.KeyCode.Space,
+	Enum.KeyCode.ButtonA
+)
+
+-- Mobile/default jump-button path. Keyboard duplicates are swallowed by debounce.
+UserInputService.JumpRequest:Connect(commandHalfBeastJump)
+
 player.CharacterAdded:Connect(function()
 	sprint = false
 end)
-
 
 --==================================================
 -- REGISTER CHARACTER
@@ -136,6 +319,9 @@ end)
 local function register(character)
 
 	if not character:GetAttribute("FatebornBoneCharacter") then
+		return
+	end
+	if rigs[character] then
 		return
 	end
 
@@ -210,6 +396,9 @@ local function register(character)
 		"Animator",
 		10
 	)
+	local visualRoot = character:FindFirstChild("RaceVisualRoot")
+	local visualMotor = visualRoot and visualRoot:FindFirstChild("RaceVisualRootWeld")
+	local visualRollPivot = visualRoot and visualRoot.CFrame:PointToObjectSpace(mesh.Position) or Vector3.zero
 
 	local rig = {
 		humanoid = humanoid,
@@ -219,6 +408,11 @@ local function register(character)
 		animator = animator,
 		tracks = {},
 		nativeIds = {},
+		connections = {},
+		actionUntil = -math.huge,
+		tuning = characterProfile and characterProfile.AnimationTuning or {},
+		visualMotor = visualMotor and visualMotor:IsA("Motor6D") and visualMotor or nil,
+		visualRollPivot = visualRollPivot,
 	}
 
 	rigs[character] = rig
@@ -229,7 +423,6 @@ local function register(character)
 	--==============================================
 
 	if character == player.Character then
-
 		-- Race characters are assigned manually by the server. Reassert the
 		-- normal Roblox camera subject after the old character is removed.
 		local camera = workspace.CurrentCamera
@@ -244,6 +437,9 @@ local function register(character)
 		if animator then
 
 			for name, animationData in pairs(animationProfile) do
+				if animationData.Unclassified then
+					continue
+				end
 
 				local id = animationData.Id
 				rig.nativeIds[id] = true
@@ -260,13 +456,9 @@ local function register(character)
 				animation:Destroy()
 
 				if ok then
-
-					track.Looped = name ~= "Roll"
-
-					track.Priority =
-						name == "Roll"
-						and Enum.AnimationPriority.Action4
-						or Enum.AnimationPriority.Movement
+					local settings = animationSettings[name]
+					track.Looped = settings and settings.Looped or false
+					track.Priority = settings and settings.Priority or Enum.AnimationPriority.Movement
 
 					rig.tracks[name] = track
 
@@ -282,6 +474,101 @@ local function register(character)
 				end
 			end
 		end
+
+		local function actionLength(name, fallback)
+			local track = rig.tracks[name]
+			return math.max(fallback, track and track.Length or 0)
+		end
+
+		local function actionDuration(name, fallback, startOffset, playbackSpeed)
+			local track = rig.tracks[name]
+			local length = track and track.Length or 0
+			if length <= 0 then
+				return fallback
+			end
+			return math.max(fallback, math.max(0, length - (startOffset or 0)) / (playbackSpeed or 1))
+		end
+
+		local function onBasicAttack()
+			local startedAt = character:GetAttribute("BasicAttackStartedAt")
+			if type(startedAt) == "number" and startedAt > (rig.lastBasicAttackAt or -math.huge) then
+				rig.lastBasicAttackAt = startedAt
+				local comboIndex = character:GetAttribute("BasicAttackComboIndex")
+				local comboSlots = animationProfile.BasicAttack and animationProfile.BasicAttack.ComboSlots
+				local animationName = type(comboIndex) == "number" and comboSlots and comboSlots[comboIndex]
+				local selectedName = animationName or "BasicAttack"
+				local startOffset = rig.tuning.BasicAttackStartOffset or 0
+				local playbackSpeed = rig.tuning.BasicAttackPlaybackSpeed or 1
+				playAction(
+					rig,
+					selectedName,
+					actionDuration(selectedName, 0.38, startOffset, playbackSpeed),
+					rig.tuning.BasicAttackFadeIn or 0.04
+				)
+				local track = rig.tracks[selectedName]
+				local function tuneTrack()
+					if track and track.IsPlaying and rig.lastBasicAttackAt == startedAt and track.Length > 0 then
+						track.TimePosition = math.min(startOffset, math.max(0, track.Length - 0.001))
+						track:AdjustSpeed(playbackSpeed)
+					end
+				end
+				tuneTrack()
+				if track and track.Length <= 0 then
+					table.insert(rig.connections, track:GetPropertyChangedSignal("Length"):Once(tuneTrack))
+				end
+			end
+		end
+
+		local function onSkillCast()
+			local startedAt = character:GetAttribute("SkillCastStartedAt")
+			if type(startedAt) == "number" and startedAt > (rig.lastSkillCastAt or -math.huge) then
+				rig.lastSkillCastAt = startedAt
+				playAction(rig, "SpellCast", actionLength("SpellCast", 0.45), 0.05)
+			end
+		end
+
+		table.insert(rig.connections, character:GetAttributeChangedSignal("BasicAttackStartedAt"):Connect(onBasicAttack))
+		table.insert(rig.connections, character:GetAttributeChangedSignal("SkillCastStartedAt"):Connect(onSkillCast))
+		table.insert(rig.connections, humanoid.StateChanged:Connect(function(_, newState)
+			if rig.dead then
+				return
+			end
+
+			if newState == Enum.HumanoidStateType.Jumping then
+			local stateNow = workspace:GetServerTimeNow()
+			-- commandHalfBeastJump already chose the variant and started the clip.
+			-- Only select here when another system caused the jump.
+			if stateNow - (rig.jumpCommandedAt or -math.huge) > 0.12 then
+				local sprintingAtJumpStart = sprint
+					or character:GetAttribute("Sprinting") == true
+				rig.jumpAnimationName = sprintingAtJumpStart and "RunningJump" or "Jump"
+				rig.jumpStartedAt = stateNow
+				playState(rig, rig.jumpAnimationName, 0.04, true)
+			end
+		elseif newState == Enum.HumanoidStateType.Landed then
+				-- The next grounded PreAnimation pass will select Idle/Walk/Run.
+				-- Clear only the takeoff timestamp so an old jump cannot hold the
+				-- short Freefall startup window on a later state transition.
+				rig.jumpStartedAt = nil
+			end
+		end))
+		table.insert(rig.connections, humanoid.Died:Connect(function()
+			rig.dead = true
+			playAction(rig, "Death", math.huge, 0.02)
+		end))
+		table.insert(rig.connections, character.AncestryChanged:Connect(function(_, parent)
+			if parent then
+				return
+			end
+			for _, connection in ipairs(rig.connections) do
+				connection:Disconnect()
+			end
+			rig.connections = {}
+			rigs[character] = nil
+		end))
+
+		onBasicAttack()
+		onSkillCast()
 	end
 end
 
@@ -314,131 +601,93 @@ end
 --==================================================
 
 RunService.PreAnimation:Connect(function()
-
 	local character = player.Character
 	local rig = character and rigs[character]
-
 	if not rig then
 		return
 	end
 
-
-	local velocity = rig.root.AssemblyLinearVelocity
-
-	local speed = Vector3.new(
-		velocity.X,
-		0,
-		velocity.Z
-	).Magnitude
-
-
-	local rollStart =
-		character:GetAttribute("RollStartedAt")
-		or -100
-
 	local serverNow = workspace:GetServerTimeNow()
+	local humanoid = rig.humanoid
+	local velocity = rig.root.AssemblyLinearVelocity
+	local speed = Vector3.new(velocity.X, 0, velocity.Z).Magnitude
+	local rollStart = character:GetAttribute("RollStartedAt") or -100
 	local rollTime = serverNow - rollStart
+	local rollDuration = rig.tuning.RollGameplayDuration or 0.6
 	local reactionActive = serverNow < (character:GetAttribute("HitReactionUntil") or -math.huge)
-
-
 	local desired
 
+	if rig.dead or humanoid.Health <= 0 then
+		if not rig.dead then
+			rig.dead = true
+			playAction(rig, "Death", math.huge, 0.02)
+		end
+		return
+	end
 
-	if rig.humanoid.Health > 0 then
-
-		if reactionActive then
-			desired = nil
-
-		elseif rollTime >= 0
-			and rollTime < 0.6 then
-
-			desired = "Roll"
-
-
-		elseif rig.humanoid.FloorMaterial
-			~= Enum.Material.Air
-			and speed > 0.7 then
-
-			desired =
-				character:GetAttribute("Sprinting")
-				and "Run"
-				or "Walk"
-
+	if reactionActive then
+		local reactionStartedAt = character:GetAttribute("HitReactionStartedAt") or -math.huge
+		desired = speed > 1.5 and "SlidingStumble" or "IdleStumble"
+		if rig.reactionStartedAt ~= reactionStartedAt or rig.currentState ~= desired then
+			rig.reactionStartedAt = reactionStartedAt
+			playAction(rig, desired, math.max(0, (character:GetAttribute("HitReactionUntil") or serverNow) - serverNow), 0.03)
+		end
+		return
+	elseif rollTime >= 0 and rollTime < rollDuration then
+		desired = "Roll"
+		if rig.lastRoll ~= rollStart then
+			rig.lastRoll = rollStart
+			local remainingDuration = math.max(0.01, rollDuration - rollTime)
+			playAction(rig, desired, remainingDuration, rig.tuning.RollFadeIn or 0.04)
+			local track = rig.tracks.Roll
+			local function tuneTrack()
+				if track and track.IsPlaying and rig.lastRoll == rollStart then
+					local playbackSpeed = rig.tuning.RollPlaybackMultiplier or 1
+					if track.Length > 0 then
+						playbackSpeed *= track.Length / remainingDuration
+					end
+					track:AdjustSpeed(playbackSpeed)
+				end
+			end
+			tuneTrack()
+			if track and track.Length <= 0 then
+				table.insert(rig.connections, track:GetPropertyChangedSignal("Length"):Once(tuneTrack))
+			end
+		end
+	elseif rig.actionName and serverNow < rig.actionUntil then
+		desired = rig.actionName
+	elseif character:GetAttribute("Blocking") == true then
+		desired = "Block"
+	else
+		rig.actionName = nil
+		local state = humanoid:GetState()
+		if state == Enum.HumanoidStateType.Swimming then
+			desired = speed > 0.7 and "Swim" or "SwimIdle"
+		elseif state == Enum.HumanoidStateType.Climbing then
+			desired = "Climb"
+		elseif state == Enum.HumanoidStateType.Jumping
+			or (serverNow - (rig.jumpStartedAt or -math.huge) < JUMP_VISUAL_HOLD
+				and rig.root.AssemblyLinearVelocity.Y > -1) then
+			desired = rig.jumpAnimationName or "Jump"
+		elseif state == Enum.HumanoidStateType.Freefall or humanoid.FloorMaterial == Enum.Material.Air then
+			desired = "Fall"
+		elseif speed > 0.7 then
+			desired = character:GetAttribute("Sprinting") and "Run" or "Walk"
+		else
+			desired = "Idle"
 		end
 	end
 
+	if desired and desired ~= rig.currentState then
+		playState(rig, desired, desired == "Roll" and 0.04 or 0.12)
+	elseif desired and rig.tracks[desired] and not rig.tracks[desired].IsPlaying then
+		playState(rig, desired, 0.1)
+	end
 
-	--==============================================
-	-- CROSSFADE ANIMATION
-	--==============================================
-
-	for name, track in pairs(rig.tracks) do
-
-		if name == desired
-			and track.Length > 0 then
-
-
-			--======================================
-			-- ROLL
-			--======================================
-
-			if name == "Roll" then
-
-				if rig.lastRoll ~= rollStart then
-
-					rig.lastRoll = rollStart
-
-					track:Play(
-						0.04,
-						1,
-						track.Length / 0.6
-					)
-
-					track.TimePosition = math.min(
-						rollTime / 0.6 * track.Length,
-						track.Length - 0.001
-					)
-
-				end
-
-
-				--======================================
-				-- WALK / RUN
-				--======================================
-
-			else
-
-				if not track.IsPlaying then
-					track:Play(0.12)
-				end
-
-				-- Walk divisor 14:
-				-- sedikit lebih cepat dibanding sebelumnya 16.
-				--
-				-- Run tetap 23.2.
-
-				local animationReferenceSpeed =
-					name == "Run"
-					and 23.2
-					or 14
-
-				track:AdjustSpeed(
-					math.clamp(
-						speed / animationReferenceSpeed,
-						0.3,
-						1.5
-					)
-				)
-
-			end
-
-
-		elseif track.IsPlaying then
-
-			-- Fade-out supaya tidak pop/flick.
-			track:Stop(0.08)
-
-		end
+	local track = desired and rig.tracks[desired]
+	if track and (desired == "Walk" or desired == "Run" or desired == "Climb" or desired == "Swim") then
+		local referenceSpeed = desired == "Run" and 23.2 or 14
+		track:AdjustSpeed(math.clamp(speed / referenceSpeed, 0.3, 1.5))
 	end
 end)
 
@@ -462,7 +711,7 @@ RunService.PreSimulation:Connect(function(dt)
 
 		local humanoid = rig.humanoid
 		local root = rig.root
-
+		local humanoidState = humanoid:GetState()
 
 		--==========================================
 		-- LOCAL PLAYER MOVEMENT
@@ -474,6 +723,8 @@ RunService.PreSimulation:Connect(function(dt)
 			and not humanoid.PlatformStand
 			and humanoid.FloorMaterial
 			~= Enum.Material.Air
+			and humanoidState ~= Enum.HumanoidStateType.Jumping
+			and humanoid.Jump ~= true
 			and now
 			- (
 				character:GetAttribute(
@@ -593,10 +844,27 @@ RunService.PreSimulation:Connect(function(dt)
 				or -100
 		)
 
+		local rollDuration = rig.tuning.RollGameplayDuration or 0.6
 
 		local rolling =
 			rollTime >= 0
-			and rollTime < 0.6
+			and rollTime < rollDuration
+
+		-- Rotate only the welded Half-Beast visual during the existing roll
+		-- window. This leaves the HumanoidRootPart, physics, and server roll
+		-- authority untouched while making the whole visible model somersault.
+		if rig.visualMotor then
+			if rolling then
+				local rollAlpha = math.clamp(rollTime / rollDuration, 0, 1)
+				local rotation = CFrame.Angles(-math.pi * 2 * rollAlpha, 0, 0)
+				-- RaceVisualRoot is aligned to the visual's base, not its center.
+				-- Offset the Motor6D transform so the complete mesh rotates around
+				-- its own center instead of sweeping down through the floor.
+				rig.visualMotor.Transform = CFrame.new(rig.visualRollPivot) * rotation * CFrame.new(-rig.visualRollPivot)
+			else
+				rig.visualMotor.Transform = CFrame.identity
+			end
+		end
 
 		local reactionName = character:GetAttribute("HitReaction")
 		local reactionStartedAt = character:GetAttribute("HitReactionStartedAt") or now
@@ -642,7 +910,9 @@ RunService.PreSimulation:Connect(function(dt)
 			end
 		end
 
-		if reacting then
+		local reactionTrack = reacting
+			and rig.tracks[speed > 1.5 and "SlidingStumble" or "IdleStumble"]
+		if reacting and not (reactionTrack and reactionTrack.IsPlaying) then
 			native = false
 		end
 
@@ -654,7 +924,11 @@ RunService.PreSimulation:Connect(function(dt)
 		character:SetAttribute(
 			"LocalAnimationState",
 
-			reacting and reactionName
+			rig.dead and "Death"
+
+				or rig.currentState
+
+				or reacting and reactionName
 
 				or rolling and "Roll"
 
@@ -688,6 +962,17 @@ RunService.PreSimulation:Connect(function(dt)
 		-- Kalau native animation sedang aktif,
 		-- ambil pose native dan jangan procedural.
 		if native then
+			if rig.currentState == "Idle" then
+				-- Keep the Idle clip's body motion, but override its wide arm pose
+				-- with a relaxed, waist-adjacent hand position.
+				local inward = rig.tuning.IdleArmInward or 0
+				local forearmBend = rig.tuning.IdleForearmBend or 0
+				-- This rig's mirrored arm axes rotate downward with these signs.
+				setBoneRotation(rig, "LeftArm", 0, 0, inward)
+				setBoneRotation(rig, "RightArm", 0, 0, -inward)
+				setBoneRotation(rig, "LeftForeArm", forearmBend)
+				setBoneRotation(rig, "RightForeArm", forearmBend)
+			end
 
 			for _, boneData in pairs(
 				rig.bones

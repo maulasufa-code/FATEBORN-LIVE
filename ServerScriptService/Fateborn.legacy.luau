@@ -567,10 +567,14 @@ local function replaceRaceCharacter(player, character)
 	visualRoot.Anchored = false
 	visualRoot.Massless = true
 	visualRoot.Parent = replacement
-	local visualRootWeld = Instance.new("WeldConstraint")
+	-- A Motor6D keeps the visual attached exactly like the previous weld while
+	-- allowing the Half-Beast client to rotate only the visible mesh during a
+	-- dodge. The HumanoidRootPart and authoritative movement remain unchanged.
+	local visualRootWeld = Instance.new("Motor6D")
 	visualRootWeld.Name = "RaceVisualRootWeld"
 	visualRootWeld.Part0 = root
 	visualRootWeld.Part1 = visualRoot
+	visualRootWeld.C0 = root.CFrame:ToObjectSpace(visualRoot.CFrame)
 	visualRootWeld.Parent = visualRoot
 
 	local visual = templateMesh:Clone()
@@ -641,6 +645,12 @@ local function applyCharacter(player, character)
 	character:SetAttribute("BaseWalkSpeed", humanoid.WalkSpeed)
 	character:SetAttribute("Sprinting", false)
 	character:SetAttribute("Dashing", false)
+	-- The custom Half-Beast host uses the Humanoid JumpPower path. Explicitly
+	-- select it so the assigned value below is not ignored by a template that
+	-- was saved with UseJumpPower disabled.
+	if race == "Half-Beast" then
+		humanoid.UseJumpPower = true
+	end
 	humanoid.JumpPower = math.clamp(50 * (0.94 + speed * 0.08), 45, 65)
 
 	local ability = profile.Fate.Ability
@@ -1148,6 +1158,14 @@ local function basicAttack(player, direction)
 		cooldowns[player].Basic = now + comboResetTime
 		comboState.Index = 0
 	end
+	-- The existing server-authoritative M1 path remains responsible for
+	-- validation, timing, hit detection, and damage. This replicated timestamp
+	-- only lets the Half-Beast visual controller start its cached attack track
+	-- after this attack has been accepted.
+	if character:GetAttribute("Race") == "Half-Beast" then
+		character:SetAttribute("BasicAttackComboIndex", comboIndex)
+		character:SetAttribute("BasicAttackStartedAt", workspace:GetServerTimeNow())
+	end
 	local comboCurve = M1Config.ComboDamage[comboLimit] or M1Config.ComboDamage[4]
 	local comboMultiplier = comboCurve[comboIndex] or 1
 	local masteryMultiplier = M1Config.GetMasteryDamageMult(character)
@@ -1195,6 +1213,9 @@ local function useAbility(player, slot, direction)
 	local move = kit[slot]
 	if not move or not checkCooldown(player, "Skill" .. slot, move.Cooldown) then
 		return
+	end
+	if player.Character and player.Character:GetAttribute("Race") == "Half-Beast" then
+		player.Character:SetAttribute("SkillCastStartedAt", workspace:GetServerTimeNow())
 	end
 	local color = abilityColor(profile)
 	local damage = baseDamage(profile) * move.Damage

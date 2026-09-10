@@ -14,6 +14,7 @@ local ROLL_COOLDOWN=2.2
 local ROLL_SPEED=1.2
 local ROLL_DURATION=(21/30)/ROLL_SPEED
 local preRollWalkSpeed=16
+local halfBeast=false
 local function direction()
  if humanoid and humanoid.MoveDirection.Magnitude>.05 then return humanoid.MoveDirection.Unit end
  local camera=Workspace.CurrentCamera
@@ -39,6 +40,7 @@ local function playMovement()
  if wanted then wanted:AdjustSpeed(sprinting and 1 or math.clamp(humanoid.WalkSpeed/16,.8,1.25)) end
 end
 local function doRoll()
+ if halfBeast then return end
  local now=os.clock()
  if not humanoid or humanoid.Health<=0 or rolling or now-lastRoll<ROLL_COOLDOWN then return end
  lastRoll=now rolling=true stopMovement(.05)
@@ -55,6 +57,7 @@ local function doRoll()
  end)
 end
 local function setSprint(enabled)
+ if halfBeast then return end
  if sprinting==enabled then return end
  sprinting=enabled
  if character then character:SetAttribute("Sprinting",enabled) end
@@ -62,6 +65,8 @@ local function setSprint(enabled)
 end
 local function setup(newCharacter)
  character=newCharacter humanoid=character:WaitForChild("Humanoid") character:WaitForChild("HumanoidRootPart")
+ halfBeast=character:GetAttribute("FatebornBoneCharacter")==true
+ if halfBeast then sprinting=false rolling=false ctrlWasDown=false return end
  walkTrack=loadTrack(animations.Walk,Enum.AnimationPriority.Movement,true)
  runTrack=loadTrack(animations.Run,Enum.AnimationPriority.Movement,true)
  rollTrack=loadTrack(animations.Roll,Enum.AnimationPriority.Action4,false)
@@ -82,7 +87,7 @@ ContextActionService:BindActionAtPriority("FatebornRollV2",function(_,state)
  if state==Enum.UserInputState.Begin then doRoll() end return Enum.ContextActionResult.Sink
 end,false,4000,Enum.KeyCode.LeftControl,Enum.KeyCode.RightControl)
 RunService.RenderStepped:Connect(function()
- if not humanoid then return end
+ if not humanoid or halfBeast then return end
  local shift=UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
  if shift~=sprinting then setSprint(shift) end
  local ctrl=UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)

@@ -17,6 +17,11 @@ local rollCharacter
 local shiftHeld = false
 local landingConnection
 
+local function usesHalfBeastController()
+	local character = player.Character
+	return character and character:GetAttribute("FatebornBoneCharacter") == true
+end
+
 local function getCharacterParts()
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
@@ -43,6 +48,9 @@ local function movementDirection()
 end
 
 local function setSprint(enabled)
+	if usesHalfBeastController() then
+		return
+	end
 	local character = player.Character
 	if character then
 		character:SetAttribute("Sprinting", enabled)
@@ -53,6 +61,9 @@ local function setSprint(enabled)
 end
 
 local function triggerDash()
+	if usesHalfBeastController() then
+		return
+	end
 	local character, humanoid = getCharacterParts()
 	if character and humanoid then
 		local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", humanoid)

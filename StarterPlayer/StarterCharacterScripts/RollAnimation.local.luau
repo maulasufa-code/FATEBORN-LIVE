@@ -7,6 +7,9 @@ local ROLL_COOLDOWN = 1.5 -- detik
 
 local player = Players.LocalPlayer
 local character = script.Parent
+-- Half-Beast roll playback is owned by PlayerMovement.local.luau and the
+-- existing PlayerMovement RemoteEvent state, rather than this legacy P-key clip.
+if character:GetAttribute("FatebornBoneCharacter") == true then return end
 local humanoid = character:WaitForChild("Humanoid")
 local animator = humanoid:WaitForChild("Animator")
 
